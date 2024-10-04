@@ -10,6 +10,7 @@ repository = "https://github.com/kojix2/gpscan"
 [dependencies]
 chrono = "0.4"
 sysinfo = "0.31"
+clap = { version = "4.5", features = ["derive", "cargo"] }
 
 [dev-dependencies]
 tempdir = "0.3"

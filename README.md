@@ -1,13 +1,13 @@
 # gpscan
 
-`gpscan` is a Rust tool that recursively scans a directory and generates an XML file compatible with [GrandPerspective](https://grandperspectiv.sourceforge.net/), a disk usage visualization tool for macOS.
+Generate [GrandPerspective](https://grandperspectiv.sourceforge.net/) compatible XML files on Linux!
 
 ## Features
 
 - Recursively scans directories and files
 - Generates XML output compatible with GrandPerspective
 - Skips symbolic links to prevent infinite loops
-- Handles file permissions and errors gracefully
+- Handles file permissions and errors
 
 ## Installation
 
