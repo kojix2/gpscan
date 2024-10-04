@@ -13,14 +13,14 @@ Generate [GrandPerspective](https://grandperspectiv.sourceforge.net/) compatible
 
 ### Download Pre-built Binary
 
-You can download the pre-built binary from the [GitHub Releases](https://github.com/yourusername/gpscan/releases) page.
+You can download the pre-built binary from the [GitHub Releases](https://github.com/kojix2/gpscan/releases) page.
 
 ### Build from Source
 
 Alternatively, build `gpscan` from source:
 
 ```sh
-git clone https://github.com/yourusername/gpscan.git
+git clone https://github.com/kojix2/gpscan.git
 cd gpscan
 cargo build --release
 ```
@@ -32,16 +32,16 @@ The compiled binary will be located at `target/release/gpscan`.
 Use `gpscan` to scan a directory on any system (e.g., Linux) and view the results on macOS using GrandPerspective:
 
 ```sh
-gpscan <directory_path> > scan_result.xml
+gpscan <directory_path> > scan_result.gpscan
 ```
 
 **Example:**
 
 ```sh
-gpscan /var/log > scan_result.xml
+gpscan /var/log > scan_result.gpscan
 ```
 
-Transfer the `scan_result.xml` file to your macOS machine, then open it in GrandPerspective via `File` > `Load Scan Data...`.
+Transfer the `scan_result.gpscan` file to your macOS machine, then open it in GrandPerspective via `File` > `Load Scan Data...`.
 
 This allows you to analyze disk usage on remote servers or systems and visualize it with the macOS GrandPerspective GUI.
 
