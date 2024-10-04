@@ -16,3 +16,10 @@ gpscan is a Rust tool that recursively scans a directory and generates an XML fi
 cargo run -- <directory_path>
 ```
 
+## Development
+
+This project was created entirely using ChatGPT.
+
+## License
+
+The license for this project is MIT, but please keep in mind that the code was entirely generated using AI.
