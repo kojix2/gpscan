@@ -1,0 +1,30 @@
+name: Cargo Build & Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build_and_test:
+    name: ${{ matrix.os }} ${{ matrix.toolchain }}
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      matrix:
+        os:
+          - ubuntu
+          - macos
+          - windows
+        toolchain:
+          - stable
+          - nightly
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      - name: Build project
+        run: cargo build --verbose
+      - name: Run tests
+        run: cargo test --verbose
+      - name: Check CLI tool help
+        run: cargo install --path . && gpscan --help && bleach --version
