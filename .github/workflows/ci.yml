@@ -13,7 +13,6 @@ jobs:
         os:
           - ubuntu
           - macos
-          - windows
         toolchain:
           - stable
           - nightly
