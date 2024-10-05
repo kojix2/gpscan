@@ -139,8 +139,8 @@ fn traverse_directory_to_xml(path: &Path, is_root: bool) -> io::Result<()> {
             Ok(entry) => {
                 let entry_path = entry.path();
 
-                // Get symlink metadata
-                let symlink_metadata = match fs::symlink_metadata(&entry_path) {
+                // Get metadata of the entry
+                let entry_metadata = match fs::symlink_metadata(&entry_path) {
                     Ok(m) => m,
                     Err(e) => {
                         eprintln!("Cannot access metadata for {}: {}", entry_path.display(), e);
@@ -148,7 +148,7 @@ fn traverse_directory_to_xml(path: &Path, is_root: bool) -> io::Result<()> {
                     }
                 };
 
-                let file_type = symlink_metadata.file_type();
+                let file_type = entry_metadata.file_type();
 
                 if file_type.is_symlink() {
                     // Skip symbolic links
@@ -159,7 +159,7 @@ fn traverse_directory_to_xml(path: &Path, is_root: bool) -> io::Result<()> {
                     traverse_directory_to_xml(&entry_path, false)?;
                 } else if file_type.is_file() {
                     // Process file entries
-                    process_file_entry(&entry_path, &symlink_metadata);
+                    process_file_entry(&entry_path, &entry_metadata);
                 } else {
                     // Handle other file types
                     eprintln!("Unknown file type: {}", entry_path.display());
