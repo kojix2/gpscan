@@ -6,6 +6,7 @@ use sysinfo::Disks;
 // Standard library imports
 use std::fs::{self, Metadata};
 use std::io;
+use std::os::unix::fs::MetadataExt; // For accessing device IDs
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -19,7 +20,14 @@ fn main() -> io::Result<()> {
             Arg::new("directory")
                 .help("The directory to scan (default: current directory)")
                 .index(1)
-                .default_value(".")
+                .default_value("."),
+        )
+        .arg(
+            Arg::new("mounts")
+                .short('m')
+                .long("mounts")
+                .help("Cross filesystem boundaries during scan")
+                .num_args(0),
         )
         .get_matches();
 
@@ -39,6 +47,13 @@ fn main() -> io::Result<()> {
         std::process::exit(2); // Exit code 2 for invalid directory
     }
 
+    // Determine whether to cross filesystem boundaries
+    let cross_mount_points = matches.contains_id("mounts");
+
+    // Get the device ID of the root directory
+    let root_metadata = fs::metadata(root_path)?;
+    let root_dev = root_metadata.dev();
+
     // Create Disks instance and refresh disk list
     let disks = Disks::new_with_refreshed_list();
 
@@ -57,7 +72,7 @@ fn main() -> io::Result<()> {
     );
 
     // Start traversing the directory
-    traverse_directory_to_xml(root_path, true)?;
+    traverse_directory_to_xml(root_path, true, root_dev, cross_mount_points)?;
 
     // Close XML tags
     println!("</ScanInfo>");
@@ -91,7 +106,12 @@ fn get_volume_info(root_path: &Path, disks: &Disks) -> (String, u64, u64) {
 }
 
 /// Recursively traverses the directory and outputs XML.
-fn traverse_directory_to_xml(path: &Path, is_root: bool) -> io::Result<()> {
+fn traverse_directory_to_xml(
+    path: &Path,
+    is_root: bool,
+    root_dev: u64,
+    cross_mount_points: bool,
+) -> io::Result<()> {
     // Get metadata of the current directory
     let metadata = match fs::metadata(path) {
         Ok(m) => m,
@@ -104,6 +124,18 @@ fn traverse_directory_to_xml(path: &Path, is_root: bool) -> io::Result<()> {
             return Ok(());
         }
     };
+
+    // Get device ID of the current directory
+    let current_dev = metadata.dev();
+
+    // Check if we should skip directories on different filesystems
+    if !cross_mount_points && current_dev != root_dev {
+        eprintln!(
+            "Skipping directory on different filesystem: {}",
+            path.display()
+        );
+        return Ok(());
+    }
 
     // Get file times
     let (created, modified, accessed) = get_file_times(&metadata);
@@ -168,7 +200,7 @@ fn traverse_directory_to_xml(path: &Path, is_root: bool) -> io::Result<()> {
                     continue;
                 } else if file_type.is_dir() {
                     // Recursively traverse directories
-                    traverse_directory_to_xml(&entry_path, false)?;
+                    traverse_directory_to_xml(&entry_path, false, root_dev, cross_mount_points)?;
                 } else if file_type.is_file() {
                     // Process file entries
                     process_file_entry(&entry_path, &entry_metadata);
