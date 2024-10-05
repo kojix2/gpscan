@@ -221,9 +221,15 @@ fn get_file_times(metadata: &Metadata) -> (String, String, String) {
 
 /// Escapes special characters for XML output.
 fn xml_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
+    s.chars()
+        .map(|c| match c {
+            '&' => "&amp;".to_string(),
+            '<' => "&lt;".to_string(),
+            '>' => "&gt;".to_string(),
+            '"' => "&quot;".to_string(),
+            '\'' => "&apos;".to_string(),
+            c if c.is_control() || c == '\u{FFFD}' => format!("&#x{:X};", c as u32),
+            c => c.to_string(),
+        })
+        .collect()
 }
