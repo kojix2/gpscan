@@ -36,7 +36,7 @@ fn main() -> io::Result<()> {
             "The specified path is not a directory: {}",
             root_path.display()
         );
-        std::process::exit(1);
+        std::process::exit(2); // Exit code 2 for invalid directory
     }
 
     // Create Disks instance and refresh disk list
@@ -96,7 +96,11 @@ fn traverse_directory_to_xml(path: &Path, is_root: bool) -> io::Result<()> {
     let metadata = match fs::metadata(path) {
         Ok(m) => m,
         Err(e) => {
-            eprintln!("Cannot access metadata for {}: {}", path.display(), e);
+            eprintln!(
+                "Error: Failed to access metadata for '{}': {}",
+                path.display(),
+                e
+            );
             return Ok(());
         }
     };
@@ -127,7 +131,11 @@ fn traverse_directory_to_xml(path: &Path, is_root: bool) -> io::Result<()> {
     let entries = match fs::read_dir(path) {
         Ok(e) => e,
         Err(e) => {
-            eprintln!("Cannot read directory {}: {}", path.display(), e);
+            eprintln!(
+                "Error: Failed to read directory '{}': {}",
+                path.display(),
+                e
+            );
             println!("</Folder>");
             return Ok(());
         }
@@ -143,7 +151,11 @@ fn traverse_directory_to_xml(path: &Path, is_root: bool) -> io::Result<()> {
                 let entry_metadata = match fs::symlink_metadata(&entry_path) {
                     Ok(m) => m,
                     Err(e) => {
-                        eprintln!("Cannot access metadata for {}: {}", entry_path.display(), e);
+                        eprintln!(
+                            "Error: Failed to access metadata for '{}': {}",
+                            entry_path.display(),
+                            e
+                        );
                         continue;
                     }
                 };
