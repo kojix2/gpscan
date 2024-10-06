@@ -18,7 +18,7 @@ fn main() -> io::Result<()> {
 
 /// Parses command-line arguments using clap.
 fn parse_args() -> ArgMatches {
-    Command::new("gpscan")
+    let mut cmd = Command::new("gpscan")
         .version(clap::crate_version!())
         .about("Recursively scans directories and generates XML compatible with GrandPerspective.")
         .arg(
@@ -32,8 +32,19 @@ fn parse_args() -> ArgMatches {
                 .long("mounts")
                 .help("Cross filesystem boundaries during scan")
                 .num_args(0),
-        )
-        .get_matches()
+        );
+
+    let matches = cmd.get_matches_mut();
+
+    // Check if directory path is provided
+    if matches.get_one::<String>("directory").is_none() {
+        // Print help message to stderr and exit(1)
+        cmd.write_long_help(&mut std::io::stderr()).unwrap();
+        eprintln!("\n[gpscan] Error: Directory path is required");
+        std::process::exit(1);
+    }
+
+    matches
 }
 
 /// Runs the main logic of the program.
@@ -125,7 +136,7 @@ fn traverse_directory_to_xml(
         Ok(m) => m,
         Err(e) => {
             eprintln!(
-                "Error: Failed to access metadata for '{}': {}",
+                "[gpscan] Error: Failed to access metadata for '{}': {}",
                 path.display(),
                 e
             );
@@ -172,7 +183,7 @@ fn traverse_directory_to_xml(
         Ok(e) => e,
         Err(e) => {
             eprintln!(
-                "Error: Failed to read directory '{}': {}",
+                "[gpscan] Error: Failed to read directory '{}': {}",
                 path.display(),
                 e
             );
@@ -192,7 +203,7 @@ fn traverse_directory_to_xml(
                     Ok(m) => m,
                     Err(e) => {
                         eprintln!(
-                            "Error: Failed to access metadata for '{}': {}",
+                            "[gpscan] Error: Failed to access metadata for '{}': {}",
                             entry_path.display(),
                             e
                         );
@@ -218,7 +229,7 @@ fn traverse_directory_to_xml(
                 }
             }
             Err(e) => {
-                eprintln!("Error reading directory entry: {}", e);
+                eprintln!("[gpscan] Error: reading directory entry: {}", e);
             }
         }
     }
