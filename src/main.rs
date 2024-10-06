@@ -18,13 +18,14 @@ fn main() -> io::Result<()> {
 
 /// Parses command-line arguments using clap.
 fn parse_args() -> ArgMatches {
-    let mut cmd = Command::new("gpscan")
+    Command::new("gpscan")
         .version(clap::crate_version!())
         .about("Recursively scans directories and generates XML compatible with GrandPerspective.")
         .arg(
             Arg::new("directory")
                 .help("The directory to scan (default: current directory)")
-                .index(1),
+                .index(1)
+                .required(true),
         )
         .arg(
             Arg::new("mounts")
@@ -32,19 +33,9 @@ fn parse_args() -> ArgMatches {
                 .long("mounts")
                 .help("Cross filesystem boundaries during scan")
                 .num_args(0),
-        );
-
-    let matches = cmd.get_matches_mut();
-
-    // Check if directory path is provided
-    if matches.get_one::<String>("directory").is_none() {
-        // Print help message to stderr and exit(1)
-        cmd.write_long_help(&mut std::io::stderr()).unwrap();
-        eprintln!("\n[gpscan] Error: Directory path is required");
-        std::process::exit(1);
-    }
-
-    matches
+        )
+        .arg_required_else_help(true)
+        .get_matches()
 }
 
 /// Runs the main logic of the program.
