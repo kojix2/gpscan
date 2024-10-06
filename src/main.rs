@@ -60,7 +60,7 @@ fn run(matches: ArgMatches) -> io::Result<()> {
     // Check if the provided path is a directory
     if !root_path.is_dir() {
         eprintln!(
-            "The specified path is not a directory: {}",
+            "[gpscan] Error: The specified path is not a directory: {}",
             root_path.display()
         );
         std::process::exit(2); // Exit code 2 for invalid directory
@@ -150,10 +150,11 @@ fn traverse_directory_to_xml(
     // Check if we should skip directories on different filesystems
     if !cross_mount_points && current_dev != root_dev {
         eprintln!(
-            "Skipping directory on different filesystem: {}",
-            path.display()
+            "[gpscan] Skipping directory on different filesystem: {} (root: {}, current: {})",
+            path.display(),
+            root_dev,
+            current_dev
         );
-        return Ok(());
     }
 
     // Get file times
@@ -215,7 +216,7 @@ fn traverse_directory_to_xml(
 
                 if file_type.is_symlink() {
                     // Skip symbolic links
-                    eprintln!("Skipping symbolic link: {}", entry_path.display());
+                    eprintln!("[gpscan] Skipping symbolic link: {}", entry_path.display());
                     continue;
                 } else if file_type.is_dir() {
                     // Recursively traverse directories
@@ -225,7 +226,7 @@ fn traverse_directory_to_xml(
                     process_file_entry(&entry_path, &entry_metadata);
                 } else {
                     // Handle other file types
-                    eprintln!("Unknown file type: {}", entry_path.display());
+                    eprintln!("[gpscan] Unknown file type: {}", entry_path.display());
                 }
             }
             Err(e) => {
