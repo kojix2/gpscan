@@ -48,13 +48,22 @@ fn run(matches: ArgMatches) -> io::Result<()> {
 
     let root_path = Path::new(directory);
 
+    // Check if the provided path exists
+    if !root_path.exists() {
+        eprintln!(
+            "[gpscan] Error: The specified path does not exist: {}",
+            root_path.display()
+        );
+        std::process::exit(1); // Exit code 1 for non-existent path
+    }
+
     // Check if the provided path is a directory
     if !root_path.is_dir() {
         eprintln!(
             "[gpscan] Error: The specified path is not a directory: {}",
             root_path.display()
         );
-        std::process::exit(2); // Exit code 2 for invalid directory
+        std::process::exit(1); // Exit code 1 for invalid directory
     }
 
     // Determine whether to cross filesystem boundaries
