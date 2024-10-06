@@ -24,10 +24,15 @@ fn main() -> io::Result<()> {
 fn parse_args() -> ArgMatches {
     Command::new("gpscan")
         .version(clap::crate_version!())
-        .about("Recursively scans directories and generates XML compatible with GrandPerspective.")
+        .about(concat!(
+            "\n\nProgram: gpscan (GrandPerspective XML Scan Dump)\n",
+            "Version: ",
+            clap::crate_version!(),
+            "\nSource:  https://github.com/kojix2/gpscan"
+        ))
         .arg(
             Arg::new("directory")
-                .help("The directory to scan (default: current directory)")
+                .help("The directory to scan (required)")
                 .index(1)
                 .required(true),
         )
@@ -35,7 +40,7 @@ fn parse_args() -> ArgMatches {
             Arg::new("mounts")
                 .short('m')
                 .long("mounts")
-                .help("Cross filesystem boundaries during scan")
+                .help("Cross filesystem boundaries during scan [false]")
                 .num_args(0),
         )
         .arg_required_else_help(true)
