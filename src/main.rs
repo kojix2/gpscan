@@ -10,6 +10,10 @@ use std::os::unix::fs::MetadataExt; // For accessing device IDs
 use std::path::Path;
 use std::time::SystemTime;
 
+// Constants representing GrandPerspective version information
+const GRANDPERSPECTIVE_APP_VERSION: &str = "4";
+const GRANDPERSPECTIVE_FORMAT_VERSION: &str = "7";
+
 /// Entry point of the program.
 fn main() -> io::Result<()> {
     let matches = parse_args();
@@ -80,7 +84,10 @@ fn run(matches: ArgMatches) -> io::Result<()> {
     let (volume_path, volume_size, free_space) = get_volume_info(root_path, &disks);
 
     // Output XML header
-    println!(r#"<GrandPerspectiveScanDump appVersion="4" formatVersion="7">"#);
+    println!(
+        r#"<GrandPerspectiveScanDump appVersion="{}" formatVersion="{}">"#,
+        GRANDPERSPECTIVE_APP_VERSION, GRANDPERSPECTIVE_FORMAT_VERSION
+    );
     let scan_time = Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
     println!(
         r#"<ScanInfo volumePath="{}" volumeSize="{}" freeSpace="{}" scanTime="{}" fileSizeMeasure="physical">"#,
