@@ -1,6 +1,6 @@
 // External crates
 use chrono::{DateTime, Utc};
-use clap::{Arg, Command};
+use clap::{Arg, ArgMatches, Command};
 use sysinfo::Disks;
 
 // Standard library imports
@@ -12,15 +12,19 @@ use std::time::SystemTime;
 
 /// Entry point of the program.
 fn main() -> io::Result<()> {
-    // Parse command-line arguments using clap
-    let matches = Command::new("gpscan")
+    let matches = parse_args();
+    run(matches)
+}
+
+/// Parses command-line arguments using clap.
+fn parse_args() -> ArgMatches {
+    Command::new("gpscan")
         .version(clap::crate_version!())
         .about("Recursively scans directories and generates XML compatible with GrandPerspective.")
         .arg(
             Arg::new("directory")
                 .help("The directory to scan (default: current directory)")
-                .index(1)
-                .default_value("."),
+                .index(1),
         )
         .arg(
             Arg::new("mounts")
@@ -29,13 +33,17 @@ fn main() -> io::Result<()> {
                 .help("Cross filesystem boundaries during scan")
                 .num_args(0),
         )
-        .get_matches();
+        .get_matches()
+}
 
+/// Runs the main logic of the program.
+fn run(matches: ArgMatches) -> io::Result<()> {
     // Get the directory path from arguments
     let directory = matches
         .get_one::<String>("directory")
         .expect("Directory path is required")
         .as_str();
+
     let root_path = Path::new(directory);
 
     // Check if the provided path is a directory
