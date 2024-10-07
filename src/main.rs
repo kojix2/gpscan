@@ -22,13 +22,21 @@ fn main() -> io::Result<()> {
 
 /// Parses command-line arguments using clap.
 fn parse_args() -> ArgMatches {
+    let bold_underline = "\x1b[1;4m";
+    let bold = "\x1b[1m";
+    let reset = "\x1b[0m";
+
     Command::new("gpscan")
         .version(clap::crate_version!())
-        .about(concat!(
-            "\n\nProgram: gpscan (GrandPerspective XML Scan Dump)\n",
-            "Version: ",
-            clap::crate_version!(),
-            "\nSource:  https://github.com/kojix2/gpscan"
+        .about(&format!(
+            "\n\n{}Program:{} {}gpscan{} (GrandPerspective XML Scan Dump)\n\
+            Version: {}\n\
+            Source:  https://github.com/kojix2/gpscan",
+            bold_underline,
+            reset,
+            bold,
+            reset,
+            clap::crate_version!()
         ))
         .arg(
             Arg::new("directory")
