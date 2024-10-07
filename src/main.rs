@@ -1,6 +1,6 @@
 // External crates
 use chrono::{DateTime, Utc};
-use clap::{Arg, ArgMatches, Command};
+use clap::ArgMatches;
 use sysinfo::Disks;
 
 // Standard library imports
@@ -10,6 +10,10 @@ use std::os::unix::fs::MetadataExt; // For accessing device IDs
 use std::path::Path;
 use std::time::SystemTime;
 
+// Import functions
+use gpscan::parse_args;
+use gpscan::xml_escape;
+
 // Constants representing GrandPerspective version information
 const GRANDPERSPECTIVE_APP_VERSION: &str = "4";
 const GRANDPERSPECTIVE_FORMAT_VERSION: &str = "7";
@@ -18,41 +22,6 @@ const GRANDPERSPECTIVE_FORMAT_VERSION: &str = "7";
 fn main() -> io::Result<()> {
     let matches = parse_args();
     run(matches)
-}
-
-/// Parses command-line arguments using clap.
-fn parse_args() -> ArgMatches {
-    let bold_underline = "\x1b[1;4m";
-    let bold = "\x1b[1m";
-    let reset = "\x1b[0m";
-
-    Command::new("gpscan")
-        .version(clap::crate_version!())
-        .about(&format!(
-            "\n\n{}Program:{} {}gpscan{} (GrandPerspective XML Scan Dump)\n\
-            Version: {}\n\
-            Source:  https://github.com/kojix2/gpscan",
-            bold_underline,
-            reset,
-            bold,
-            reset,
-            clap::crate_version!()
-        ))
-        .arg(
-            Arg::new("directory")
-                .help("The directory to scan (required)")
-                .index(1)
-                .required(true),
-        )
-        .arg(
-            Arg::new("mounts")
-                .short('m')
-                .long("mounts")
-                .help("Cross filesystem boundaries during scan [false]")
-                .num_args(0),
-        )
-        .arg_required_else_help(true)
-        .get_matches()
 }
 
 /// Runs the main logic of the program.
@@ -301,19 +270,4 @@ fn get_file_times(metadata: &Metadata) -> (String, String, String) {
     let accessed = format_time(metadata.accessed());
 
     (created, modified, accessed)
-}
-
-/// Escapes special characters for XML output.
-fn xml_escape(s: &str) -> String {
-    s.chars()
-        .map(|c| match c {
-            '&' => "&amp;".to_string(),
-            '<' => "&lt;".to_string(),
-            '>' => "&gt;".to_string(),
-            '"' => "&quot;".to_string(),
-            '\'' => "&apos;".to_string(),
-            c if c.is_control() || c == '\u{FFFD}' => format!("&#x{:X};", c as u32),
-            c => c.to_string(),
-        })
-        .collect()
 }
