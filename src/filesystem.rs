@@ -6,7 +6,10 @@ use sysinfo::Disks;
 // Standard library imports
 use std::fs::{self, Metadata};
 use std::io;
+#[cfg(unix)]
 use std::os::unix::fs::MetadataExt; // For accessing device IDs
+#[cfg(windows)]
+use std::os::windows::fs::MetadataExt; // For accessing device IDs
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -15,6 +18,18 @@ use crate::xml::xml_escape;
 // Constants representing GrandPerspective version information
 const GRANDPERSPECTIVE_APP_VERSION: &str = "4";
 const GRANDPERSPECTIVE_FORMAT_VERSION: &str = "7";
+
+// Retrieves the device ID from metadata (Unix).
+#[cfg(unix)]
+fn get_device_id(metadata: &Metadata) -> u64 {
+    metadata.dev()
+}
+
+// Retrieves the device ID from metadata (Windows).
+#[cfg(windows)]
+fn get_device_id(metadata: &Metadata) -> u64 {
+    metadata.volume_serial_number().unwrap_or(0) as u64
+}
 
 /// Runs the main logic of the program.
 pub fn run(matches: ArgMatches) -> io::Result<()> {
@@ -49,7 +64,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
 
     // Get the device ID of the root directory
     let root_metadata = fs::metadata(root_path)?;
-    let root_dev = root_metadata.dev();
+    let root_dev = get_device_id(&root_metadata);
 
     // Create Disks instance and refresh disk list
     let disks = Disks::new_with_refreshed_list();
@@ -125,17 +140,19 @@ fn traverse_directory_to_xml(
         }
     };
 
-    // Get device ID of the current directory
-    let current_dev = metadata.dev();
+    // Check if the current directory is on a different filesystem
+    if !cross_mount_points {
+        let current_dev = get_device_id(&metadata);
 
-    // Check if we should skip directories on different filesystems
-    if !cross_mount_points && current_dev != root_dev {
-        eprintln!(
-            "[gpscan] Skipping directory on different filesystem: {} (root: {}, current: {})",
-            path.display(),
-            root_dev,
-            current_dev
-        );
+        if current_dev != root_dev {
+            eprintln!(
+                "[gpscan] Skipping directory on different filesystem: {} (root: {}, current: {})",
+                path.display(),
+                root_dev,
+                current_dev
+            );
+            return Ok(());
+        }
     }
 
     // Get file times
