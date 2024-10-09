@@ -6,16 +6,13 @@ on:
 
 jobs:
   build_and_test:
-    name: ${{ matrix.os }} ${{ matrix.toolchain }}
+    name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}-latest
     strategy:
       matrix:
         os:
           - ubuntu
           - macos
-        toolchain:
-          - stable
-          - nightly
     steps:
       - uses: actions/checkout@v4
       - uses: taiki-e/install-action@v2
