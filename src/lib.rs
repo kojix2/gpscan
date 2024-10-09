@@ -1,3 +1,4 @@
+#![feature(windows_by_handle)]
 // src/lib.rs
 
 pub mod args;

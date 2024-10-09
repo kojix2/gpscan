@@ -99,11 +99,18 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
 /// Retrieves volume information for the given path.
 fn get_volume_info(root_path: &Path, disks: &Disks) -> (String, u64, u64) {
     // Convert root_path to absolute path
-    let abs_root_path = fs::canonicalize(root_path).unwrap_or_else(|_| root_path.to_path_buf());
+    let mut abs_root_path = fs::canonicalize(root_path).unwrap_or_else(|_| root_path.to_path_buf());
+    // Remove the "\\?\" prefix on Windows
+    #[cfg(windows)]
+    {
+        abs_root_path =
+            std::path::PathBuf::from(abs_root_path.to_string_lossy().replacen(r"\\?\", "", 1));
+    }
 
     // Find the disk that contains the root_path
     for disk in disks.iter() {
         let mount_point = disk.mount_point();
+
         if abs_root_path.starts_with(mount_point) {
             let volume_path = mount_point.to_string_lossy().to_string();
             let volume_size = disk.total_space();
