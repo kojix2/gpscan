@@ -99,7 +99,12 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
 /// Retrieves volume information for the given path.
 fn get_volume_info(root_path: &Path, disks: &Disks) -> (String, u64, u64) {
     // Convert root_path to absolute path
+    #[cfg(windows)]
     let mut abs_root_path = fs::canonicalize(root_path).unwrap_or_else(|_| root_path.to_path_buf());
+
+    #[cfg(not(windows))]
+    let abs_root_path = fs::canonicalize(root_path).unwrap_or_else(|_| root_path.to_path_buf());
+
     // Remove the "\\?\" prefix on Windows
     #[cfg(windows)]
     {
