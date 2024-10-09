@@ -1,5 +1,4 @@
-#![feature(windows_by_handle)]
-// src/lib.rs
+#![cfg_attr(windows, feature(windows_by_handle))] // volume_serial_number
 
 pub mod args;
 pub mod filesystem;
