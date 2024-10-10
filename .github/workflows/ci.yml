@@ -13,14 +13,26 @@ jobs:
         os:
           - ubuntu
           - macos
+          - windows
     steps:
       - uses: actions/checkout@v4
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-hack
+      - name: Set up nightly toolchain (Windows)
+        if: matrix.os == 'windows'
+        run: rustup update nightly && rustup default nightly
       - name: Build project
         run: cargo build --verbose
       - name: Run tests
         run: cargo test --verbose
       - name: Check CLI tool
-        run: cargo install --path . && gpscan .
+        run: |
+          cargo install --path . 
+          gpscan . 2> error.log 1> output.gpscan
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scan-results-${{ matrix.os }}
+          path: |
+            output.gpscan
+            error.log
