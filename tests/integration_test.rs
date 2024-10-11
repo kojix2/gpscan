@@ -1,67 +1,104 @@
 use assert_cmd::Command;
-use predicates::prelude::*; // For predicate functions
+use predicates::prelude::*;
 use std::fs::{self, File};
 use std::io::Write;
 use tempdir::TempDir;
 
 #[test]
 fn test_gpscan_output() {
-    // Create a temporary directory
+    // Set up a temporary directory structure for testing:
+    //
+    // gpscan_test
+    // ├── file1.txt
+    // ├── empty_file.txt
+    // ├── subdir
+    // │   └── file2.txt
+    // └── empty_dir
+    //
     let temp_dir = TempDir::new("gpscan_test").expect("Failed to create temp dir");
     let dir_path = temp_dir.path();
 
-    // Create sample files and directories
-    fs::create_dir(dir_path.join("subdir")).expect("Failed to create subdir");
-
+    // Create a non-empty file with sample content
     let mut file1 = File::create(dir_path.join("file1.txt")).expect("Failed to create file1");
     writeln!(file1, "This is a test file.").expect("Failed to write to file1");
 
+    // Create an empty file
+    File::create(dir_path.join("empty_file.txt")).expect("Failed to create empty_file");
+
+    // Create a subdirectory
+    fs::create_dir(dir_path.join("subdir")).expect("Failed to create subdir");
+
+    // Create a non-empty file inside the subdirectory
     let mut file2 =
         File::create(dir_path.join("subdir").join("file2.txt")).expect("Failed to create file2");
     writeln!(file2, "This is another test file.").expect("Failed to write to file2");
 
-    // Build the gpscan binary
+    // Create an empty directory
+    fs::create_dir(dir_path.join("empty_dir")).expect("Failed to create empty_dir");
+
+    // Run `gpscan` without additional arguments and capture its output
     let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
-
-    // Run the gpscan command
     cmd.arg(dir_path.to_str().unwrap());
-
-    // Assert that the command runs successfully
-    cmd.assert().success();
-
-    // Capture the output
     let output = cmd.output().expect("Failed to execute gpscan");
     let xml_output = String::from_utf8_lossy(&output.stdout);
 
-    // Create predicates to check the XML output
-    let file1_predicate = predicate::str::contains(r#"<File name="file1.txt""#);
-    let subdir_predicate = predicate::str::contains(r#"<Folder name="subdir""#);
-    let file2_predicate = predicate::str::contains(r#"<File name="file2.txt""#);
-    let start_tag_predicate =
-        predicate::str::starts_with(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
-    let end_tag_predicate = predicate::str::ends_with(r#"</GrandPerspectiveScanDump>"#);
-
-    // Check that the XML output contains expected entries
+    // Check if the XML output contains expected entries for non-empty files and folders
     assert!(
-        file1_predicate.eval(&xml_output),
+        predicate::str::contains(r#"<File name="file1.txt""#).eval(&xml_output),
         "XML output does not contain file1.txt"
     );
     assert!(
-        subdir_predicate.eval(&xml_output),
+        predicate::str::contains(r#"<Folder name="subdir""#).eval(&xml_output),
         "XML output does not contain subdir"
     );
     assert!(
-        file2_predicate.eval(&xml_output),
+        predicate::str::contains(r#"<File name="file2.txt""#).eval(&xml_output),
         "XML output does not contain file2.txt"
     );
 
-    // Check that the XML starts and ends with the correct tags
+    // Check if the XML output does NOT contain empty files and empty folders
     assert!(
-        start_tag_predicate.eval(&xml_output),
+        !predicate::str::contains(r#"<File name="empty_file.txt""#).eval(&xml_output),
+        "XML output contains empty_file.txt"
+    );
+    assert!(
+        !predicate::str::contains(r#"<Folder name="empty_dir""#).eval(&xml_output),
+        "XML output contains empty_dir"
+    );
+
+    // Check the start and end tags of the XML output
+    assert!(
+        predicate::str::starts_with(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<GrandPerspectiveScanDump"#
+        )
+        .eval(&xml_output),
         "XML output does not start with <GrandPerspectiveScanDump>"
     );
     assert!(
-        end_tag_predicate.eval(&xml_output.trim_end()),
+        predicate::str::ends_with(r#"</GrandPerspectiveScanDump>"#).eval(&xml_output.trim_end()),
         "XML output does not end with </GrandPerspectiveScanDump>"
+    );
+
+    // Test --include-zero-files option: check if empty files are included in the XML output
+    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    cmd.arg(dir_path.to_str().unwrap())
+        .arg("--include-zero-files");
+    let output = cmd.output().expect("Failed to execute gpscan");
+    let xml_output = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        predicate::str::contains(r#"<File name="empty_file.txt""#).eval(&xml_output),
+        "XML output does not contain empty_file.txt"
+    );
+
+    // Test --include-empty-folders option: check if empty folders are included in the XML output
+    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    cmd.arg(dir_path.to_str().unwrap())
+        .arg("--include-empty-folders");
+    let output = cmd.output().expect("Failed to execute gpscan");
+    let xml_output = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        predicate::str::contains(r#"<Folder name="empty_dir""#).eval(&xml_output),
+        "XML output does not contain empty_dir"
     );
 }
