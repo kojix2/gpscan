@@ -29,21 +29,21 @@ pub fn parse_args() -> ArgMatches {
                 .short('m')
                 .long("mounts")
                 .help("Cross filesystem boundaries during scan [false]")
-                .num_args(0),
+                .action(clap::ArgAction::SetTrue),
         )
         .arg(
             Arg::new("include-zero-files")
                 .short('z')
                 .long("include-zero-files")
                 .help("Include zero-byte files in the scan output [false]")
-                .num_args(0),
+                .action(clap::ArgAction::SetTrue),
         )
         .arg(
             Arg::new("include-empty-folders")
                 .short('e')
                 .long("include-empty-folders")
                 .help("Include empty folders in the scan output [false]")
-                .num_args(0),
+                .action(clap::ArgAction::SetTrue),
         )
         .arg_required_else_help(true)
         .get_matches()

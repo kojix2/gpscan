@@ -60,9 +60,9 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     }
 
     // Get option values
-    let cross_mount_points = matches.contains_id("mounts");
-    let include_zero_files = matches.contains_id("include-zero-files");
-    let include_empty_folders = matches.contains_id("include-empty-folders");
+    let cross_mount_points = matches.get_flag("mounts");
+    let include_zero_files = matches.get_flag("include-zero-files");
+    let include_empty_folders = matches.get_flag("include-empty-folders");
 
     // Get the device ID of the root directory
     let root_metadata = fs::metadata(root_path)?;
