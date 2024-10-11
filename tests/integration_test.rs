@@ -37,7 +37,7 @@ fn test_gpscan_output() {
     let file1_predicate = predicate::str::contains(r#"<File name="file1.txt""#);
     let subdir_predicate = predicate::str::contains(r#"<Folder name="subdir""#);
     let file2_predicate = predicate::str::contains(r#"<File name="file2.txt""#);
-    let start_tag_predicate = predicate::str::starts_with(r#"<GrandPerspectiveScanDump"#);
+    let start_tag_predicate = predicate::str::starts_with(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
     let end_tag_predicate = predicate::str::ends_with(r#"</GrandPerspectiveScanDump>"#);
 
     // Check that the XML output contains expected entries

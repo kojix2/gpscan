@@ -73,6 +73,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     let (volume_path, volume_size, free_space) = get_volume_info(root_path, &disks);
 
     // Output XML header
+    println!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
     println!(
         r#"<GrandPerspectiveScanDump appVersion="{}" formatVersion="{}">"#,
         GRANDPERSPECTIVE_APP_VERSION, GRANDPERSPECTIVE_FORMAT_VERSION
