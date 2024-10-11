@@ -59,8 +59,10 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
         std::process::exit(1); // Exit code 1 for invalid directory
     }
 
-    // Determine whether to cross filesystem boundaries
+    // Get option values
     let cross_mount_points = matches.contains_id("mounts");
+    let include_zero_files = matches.contains_id("include-zero-files");
+    let include_empty_folders = matches.contains_id("include-empty-folders");
 
     // Get the device ID of the root directory
     let root_metadata = fs::metadata(root_path)?;
@@ -87,8 +89,15 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
         scan_time
     );
 
-    // Start traversing the directory
-    traverse_directory_to_xml(root_path, true, root_dev, cross_mount_points)?;
+    // Start traversing the directory with new options
+    traverse_directory_to_xml(
+        root_path,
+        true,
+        root_dev,
+        cross_mount_points,
+        include_zero_files,
+        include_empty_folders,
+    )?;
 
     // Close XML tags
     println!("</ScanInfo>");
@@ -139,6 +148,8 @@ fn traverse_directory_to_xml(
     is_root: bool,
     root_dev: u64,
     cross_mount_points: bool,
+    include_zero_files: bool,
+    include_empty_folders: bool,
 ) -> io::Result<()> {
     // Get metadata of the current directory
     let metadata = match fs::metadata(path) {
@@ -181,6 +192,37 @@ fn traverse_directory_to_xml(
             .to_string()
     };
 
+    // Read directory entries and count items
+    let entries: Vec<_> = match fs::read_dir(path) {
+        Ok(read_dir) => read_dir
+            .filter_map(|entry| match entry {
+                Ok(e) => Some(e),
+                Err(e) => {
+                    eprintln!(
+                        "[gpscan] Error: Failed to read directory entry in '{}': {}",
+                        path.display(),
+                        e
+                    );
+                    None
+                }
+            })
+            .collect(),
+        Err(e) => {
+            eprintln!(
+                "[gpscan] Error: Failed to read directory '{}': {}",
+                path.display(),
+                e
+            );
+            return Ok(());
+        }
+    };
+
+    // Check if the folder is empty and should be skipped
+    if entries.is_empty() && !include_empty_folders {
+        eprintln!("[gpscan] Skipping empty folder: {}", path.display());
+        return Ok(());
+    }
+
     // Output Folder tag
     println!(
         r#"<Folder name="{}" created="{}" modified="{}" accessed="{}">"#,
@@ -190,59 +232,45 @@ fn traverse_directory_to_xml(
         accessed
     );
 
-    // Read directory entries
-    let entries = match fs::read_dir(path) {
-        Ok(e) => e,
-        Err(e) => {
-            eprintln!(
-                "[gpscan] Error: Failed to read directory '{}': {}",
-                path.display(),
-                e
-            );
-            println!("</Folder>");
-            return Ok(());
-        }
-    };
-
     // Iterate over directory entries
     for entry in entries {
-        match entry {
-            Ok(entry) => {
-                let entry_path = entry.path();
+        let entry_path = entry.path();
 
-                // Get metadata of the entry
-                let entry_metadata = match fs::symlink_metadata(&entry_path) {
-                    Ok(m) => m,
-                    Err(e) => {
-                        eprintln!(
-                            "[gpscan] Error: Failed to access metadata for '{}': {}",
-                            entry_path.display(),
-                            e
-                        );
-                        continue;
-                    }
-                };
-
-                let file_type = entry_metadata.file_type();
-
-                if file_type.is_symlink() {
-                    // Skip symbolic links
-                    eprintln!("[gpscan] Skipping symbolic link: {}", entry_path.display());
-                    continue;
-                } else if file_type.is_dir() {
-                    // Recursively traverse directories
-                    traverse_directory_to_xml(&entry_path, false, root_dev, cross_mount_points)?;
-                } else if file_type.is_file() {
-                    // Process file entries
-                    process_file_entry(&entry_path, &entry_metadata);
-                } else {
-                    // Handle other file types
-                    eprintln!("[gpscan] Unknown file type: {}", entry_path.display());
-                }
-            }
+        // Get metadata of the entry
+        let entry_metadata = match fs::symlink_metadata(&entry_path) {
+            Ok(m) => m,
             Err(e) => {
-                eprintln!("[gpscan] Error: reading directory entry: {}", e);
+                eprintln!(
+                    "[gpscan] Error: Failed to access metadata for '{}': {}",
+                    entry_path.display(),
+                    e
+                );
+                continue;
             }
+        };
+
+        let file_type = entry_metadata.file_type();
+
+        if file_type.is_symlink() {
+            // Skip symbolic links
+            eprintln!("[gpscan] Skipping symbolic link: {}", entry_path.display());
+            continue;
+        } else if file_type.is_dir() {
+            // Recursively traverse directories
+            traverse_directory_to_xml(
+                &entry_path,
+                false,
+                root_dev,
+                cross_mount_points,
+                include_zero_files,
+                include_empty_folders,
+            )?;
+        } else if file_type.is_file() {
+            // Process file entries
+            process_file_entry(&entry_path, &entry_metadata, include_zero_files);
+        } else {
+            // Handle other file types
+            eprintln!("[gpscan] Unknown file type: {}", entry_path.display());
         }
     }
 
@@ -252,7 +280,7 @@ fn traverse_directory_to_xml(
 }
 
 /// Processes a file entry and outputs XML.
-fn process_file_entry(path: &Path, metadata: &Metadata) {
+fn process_file_entry(path: &Path, metadata: &Metadata, include_zero_files: bool) {
     // Get file name
     let name = path
         .file_name()
@@ -262,6 +290,12 @@ fn process_file_entry(path: &Path, metadata: &Metadata) {
 
     // Get file size
     let size = metadata.len();
+
+    // Skip zero-byte files if the `include_zero_files` option is not set
+    if size == 0 && !include_zero_files {
+        eprintln!("[gpscan] Skipping zero-byte file: {}", path.display());
+        return;
+    }
 
     // Get file times
     let (created, modified, accessed) = get_file_times(metadata);
