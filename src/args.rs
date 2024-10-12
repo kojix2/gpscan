@@ -35,14 +35,14 @@ pub fn parse_args() -> ArgMatches {
             Arg::new("include-zero-files")
                 .short('z')
                 .long("include-zero-files")
-                .help("Include zero-byte files in the scan output [false]")
+                .help("Include zero-byte files in scan [false]")
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(
             Arg::new("include-empty-folders")
                 .short('e')
                 .long("include-empty-folders")
-                .help("Include empty folders in the scan output [false]")
+                .help("Include empty folders in scan [false]")
                 .action(clap::ArgAction::SetTrue),
         )
         .arg_required_else_help(true)
