@@ -21,15 +21,16 @@ use crate::xml::xml_escape;
 const GRANDPERSPECTIVE_APP_VERSION: &str = "4";
 const GRANDPERSPECTIVE_FORMAT_VERSION: &str = "7";
 
+// Retrieves the device ID from metadata (Linux).
+#[cfg(target_os = "linux")]
+fn get_device_id(metadata: &Metadata) -> u64 {
+    metadata.st_dev()
+}
+
 // Retrieves the device ID from metadata (Unix).
 #[cfg(any(target_os = "freebsd", target_os = "macos"))]
 fn get_device_id(metadata: &Metadata) -> u64 {
     metadata.dev()
-}
-
-#[cfg(target_os = "linux")]
-fn get_device_id(metadata: &Metadata) -> u64 {
-    metadata.st_dev()
 }
 
 // Retrieves the device ID from metadata (Windows).
