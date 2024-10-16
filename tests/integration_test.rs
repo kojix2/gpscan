@@ -2,6 +2,7 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use std::fs::{self, File};
 use std::io::Write;
+use std::os::unix::fs::symlink;
 use tempdir::TempDir;
 
 #[test]
@@ -13,7 +14,9 @@ fn test_gpscan_output() {
     // ├── empty_file.txt
     // ├── subdir
     // │   └── file2.txt
-    // └── empty_dir
+    // ├── empty_dir
+    // ├── symlink_to_file1 -> file1.txt
+    // └── symlink_to_subdir -> subdir
     //
     let temp_dir = TempDir::new("gpscan_test").expect("Failed to create temp dir");
     let dir_path = temp_dir.path();
@@ -36,6 +39,15 @@ fn test_gpscan_output() {
     // Create an empty directory
     fs::create_dir(dir_path.join("empty_dir")).expect("Failed to create empty_dir");
 
+    // Create symbolic links
+    symlink(
+        dir_path.join("file1.txt"),
+        dir_path.join("symlink_to_file1"),
+    )
+    .expect("Failed to create symlink to file1");
+    symlink(dir_path.join("subdir"), dir_path.join("symlink_to_subdir"))
+        .expect("Failed to create symlink to subdir");
+
     // Run `gpscan` without additional arguments and capture its output
     let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
     cmd.arg(dir_path.to_str().unwrap());
@@ -56,7 +68,7 @@ fn test_gpscan_output() {
         "XML output does not contain file2.txt"
     );
 
-    // Check if the XML output does NOT contain empty files and empty folders
+    // Check if the XML output does NOT contain empty files, empty folders, or symbolic links
     assert!(
         !predicate::str::contains(r#"<File name="empty_file.txt""#).eval(&xml_output),
         "XML output contains empty_file.txt"
@@ -64,6 +76,14 @@ fn test_gpscan_output() {
     assert!(
         !predicate::str::contains(r#"<Folder name="empty_dir""#).eval(&xml_output),
         "XML output contains empty_dir"
+    );
+    assert!(
+        !predicate::str::contains(r#"<File name="symlink_to_file1""#).eval(&xml_output),
+        "XML output contains symlink_to_file1"
+    );
+    assert!(
+        !predicate::str::contains(r#"<Folder name="symlink_to_subdir""#).eval(&xml_output),
+        "XML output contains symlink_to_subdir"
     );
 
     // Check the start and end tags of the XML output
