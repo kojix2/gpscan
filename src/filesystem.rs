@@ -1,6 +1,7 @@
 // External crates
 use chrono::{DateTime, Utc};
 use clap::ArgMatches;
+use std::collections::HashSet;
 use sysinfo::Disks;
 
 // Standard library imports
@@ -37,6 +38,25 @@ fn get_device_id(metadata: &Metadata) -> u64 {
 #[cfg(windows)]
 fn get_device_id(metadata: &Metadata) -> u64 {
     metadata.volume_serial_number().unwrap_or(0) as u64
+}
+
+// Retrieves the inode number from metadata (Linux).
+#[cfg(target_os = "linux")]
+fn get_inode_number(metadata: &Metadata) -> u64 {
+    metadata.st_ino()
+}
+
+// Retrieves the inode number from metadata (Unix).
+#[cfg(any(target_os = "freebsd", target_os = "macos"))]
+fn get_inode_number(metadata: &Metadata) -> u64 {
+    metadata.ino()
+}
+
+// Retrieves the inode number from metadata (Windows).
+#[cfg(target_os = "windows")]
+fn get_inode_number(metadata: &Metadata) -> u64 {
+    // Note: Windows does not have inodes. Use the file index instead.
+    metadata.file_index().unwrap_or(0)
 }
 
 /// Runs the main logic of the program.
@@ -98,6 +118,9 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
         scan_time
     );
 
+    // Create a set to store visited inodes
+    let mut visited_inodes = HashSet::new();
+
     // Start traversing the directory with new options
     traverse_directory_to_xml(
         root_path,
@@ -107,6 +130,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
         cross_mount_points,
         include_zero_files,
         include_empty_folders,
+        &mut visited_inodes,
     )?;
 
     // Close XML tags
@@ -161,6 +185,7 @@ fn traverse_directory_to_xml(
     cross_mount_points: bool,
     include_zero_files: bool,
     include_empty_folders: bool,
+    visited_inodes: &mut HashSet<u64>,
 ) -> io::Result<()> {
     // Get metadata of the current directory
     let metadata = match fs::metadata(path) {
@@ -276,6 +301,7 @@ fn traverse_directory_to_xml(
                 cross_mount_points,
                 include_zero_files,
                 include_empty_folders,
+                visited_inodes,
             )?;
         } else if file_type.is_file() {
             // Process file entries
@@ -284,6 +310,7 @@ fn traverse_directory_to_xml(
                 &entry_metadata,
                 include_zero_files,
                 apparent_size_flag,
+                visited_inodes,
             );
         } else {
             // Handle other file types
@@ -344,7 +371,20 @@ fn process_file_entry(
     metadata: &Metadata,
     include_zero_files: bool,
     apparent_size_flag: bool,
+    visited_inodes: &mut HashSet<u64>,
 ) {
+    // Get inode number
+    let inode = get_inode_number(metadata);
+
+    // Skip if the file is a hard link
+    if visited_inodes.contains(&inode) {
+        eprintln!("[gpscan] Skipping hard link file: {}", path.display());
+        return;
+    }
+
+    // Add inode number to the set of visited inodes
+    visited_inodes.insert(inode);
+
     // Get file name
     let name = path
         .file_name()
