@@ -1,10 +1,11 @@
 // External crates
 use chrono::{DateTime, Utc};
 use clap::ArgMatches;
-use std::collections::HashSet;
-use sysinfo::Disks;
+#[cfg(any(target_os = "freebsd", target_os = "linux", target_os = "macos"))]
+use nix::sys::statvfs::statvfs;
 
 // Standard library imports
+use std::collections::HashSet;
 use std::fs::{self, Metadata};
 use std::io;
 #[cfg(target_os = "linux")]
@@ -97,11 +98,8 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     let root_metadata = fs::metadata(root_path)?;
     let root_dev = get_device_id(&root_metadata);
 
-    // Create Disks instance and refresh disk list
-    let disks = Disks::new_with_refreshed_list();
-
     // Get volume information
-    let (volume_path, volume_size, free_space) = get_volume_info(root_path, &disks);
+    let (volume_path, volume_size, free_space) = get_volume_info(root_path);
 
     // Output XML header
     println!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
@@ -141,30 +139,28 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
 }
 
 /// Retrieves volume information for the given path.
-fn get_volume_info(root_path: &Path, disks: &Disks) -> (String, u64, u64) {
+fn get_volume_info(root_path: &Path) -> (String, u64, u64) {
     // Convert root_path to absolute path
-    #[cfg(windows)]
-    let mut abs_root_path = fs::canonicalize(root_path).unwrap_or_else(|_| root_path.to_path_buf());
-
-    #[cfg(not(windows))]
     let abs_root_path = fs::canonicalize(root_path).unwrap_or_else(|_| root_path.to_path_buf());
 
-    // Remove the "\\?\" prefix on Windows
     #[cfg(windows)]
     {
-        abs_root_path =
+        // Remove the "\\?\" prefix on Windows
+        let abs_root_path =
             std::path::PathBuf::from(abs_root_path.to_string_lossy().replacen(r"\\?\", "", 1));
+
+        // TODO: Implement Windows volume information
+        return ("/".to_string(), 0, 0);
     }
 
-    // Find the disk that contains the root_path
-    for disk in disks.iter() {
-        let mount_point = disk.mount_point();
+    #[cfg(any(target_os = "freebsd", target_os = "linux", target_os = "macos"))]
+    {
+        if let Ok(vfs) = statvfs(&abs_root_path) {
+            let total_space = vfs.blocks() as u64 * vfs.fragment_size() as u64;
+            let available_space = vfs.blocks_available() as u64 * vfs.fragment_size() as u64;
+            let volume_path = abs_root_path.to_string_lossy().to_string();
 
-        if abs_root_path.starts_with(mount_point) {
-            let volume_path = mount_point.to_string_lossy().to_string();
-            let volume_size = disk.total_space();
-            let free_space = disk.available_space();
-            return (volume_path, volume_size, free_space);
+            return (volume_path, total_space, available_space);
         }
     }
 
