@@ -16,7 +16,8 @@ fn test_gpscan_output() {
     // ├── file1.txt
     // ├── empty_file.txt
     // ├── subdir
-    // │   └── file2.txt
+    // │   ├── file2.txt
+    // │   └── hardlink_to_file2 -> file2.txt
     // ├── empty_dir
     // ├── symlink_to_file1 -> file1.txt
     // └── symlink_to_subdir -> subdir
@@ -51,7 +52,16 @@ fn test_gpscan_output() {
     symlink(dir_path.join("subdir"), dir_path.join("symlink_to_subdir"))
         .expect("Failed to create symlink to subdir");
 
-    // Run `gpscan` without additional arguments and capture its output
+    use std::fs::hard_link;
+
+    // Create a hard link inside the subdirectory
+    hard_link(
+        dir_path.join("subdir").join("file2.txt"),
+        dir_path.join("subdir").join("hardlink_to_file2"),
+    )
+    .expect("Failed to create hard link to file2");
+
+    // Run `gpscan` and capture its output
     let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
     cmd.arg(dir_path.to_str().unwrap());
     let output = cmd.output().expect("Failed to execute gpscan");
@@ -89,7 +99,13 @@ fn test_gpscan_output() {
         "XML output contains symlink_to_subdir"
     );
 
-    // Check the start and end tags of the XML output
+    // Check if the hard link in the subdirectory is correctly skipped
+    assert!(
+        !predicate::str::contains(r#"<File name="hardlink_to_file2""#).eval(&xml_output),
+        "XML output contains hardlink_to_file2"
+    );
+
+    // Test for start and end XML tags
     assert!(
         predicate::str::starts_with(
             r#"<?xml version="1.0" encoding="UTF-8"?>
