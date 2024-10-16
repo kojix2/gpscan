@@ -2,7 +2,10 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use std::fs::{self, File};
 use std::io::Write;
+#[cfg(not(target_os = "windows"))]
 use std::os::unix::fs::symlink;
+#[cfg(target_os = "windows")]
+use std::os::windows::fs::symlink_file as symlink;
 use tempdir::TempDir;
 
 #[test]
