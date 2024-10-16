@@ -6,10 +6,12 @@ use sysinfo::Disks;
 // Standard library imports
 use std::fs::{self, Metadata};
 use std::io;
-#[cfg(unix)]
-use std::os::unix::fs::MetadataExt; // For accessing device IDs
-#[cfg(windows)]
-use std::os::windows::fs::MetadataExt; // For accessing device IDs
+#[cfg(target_os = "linux")]
+use std::os::linux::fs::MetadataExt;
+#[cfg(any(target_os = "freebsd", target_os = "macos"))]
+use std::os::unix::fs::MetadataExt;
+#[cfg(target_os = "windows")]
+use std::os::windows::fs::MetadataExt;
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -20,9 +22,14 @@ const GRANDPERSPECTIVE_APP_VERSION: &str = "4";
 const GRANDPERSPECTIVE_FORMAT_VERSION: &str = "7";
 
 // Retrieves the device ID from metadata (Unix).
-#[cfg(unix)]
+#[cfg(any(target_os = "freebsd", target_os = "macos"))]
 fn get_device_id(metadata: &Metadata) -> u64 {
     metadata.dev()
+}
+
+#[cfg(target_os = "linux")]
+fn get_device_id(metadata: &Metadata) -> u64 {
+    metadata.st_dev()
 }
 
 // Retrieves the device ID from metadata (Windows).
@@ -60,6 +67,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     }
 
     // Get option values
+    let apparent_size_flag = matches.get_flag("apparent-size");
     let cross_mount_points = matches.get_flag("mounts");
     let include_zero_files = matches.get_flag("include-zero-files");
     let include_empty_folders = matches.get_flag("include-empty-folders");
@@ -94,6 +102,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
         root_path,
         true,
         root_dev,
+        apparent_size_flag,
         cross_mount_points,
         include_zero_files,
         include_empty_folders,
@@ -147,6 +156,7 @@ fn traverse_directory_to_xml(
     path: &Path,
     is_root: bool,
     root_dev: u64,
+    apparent_size_flag: bool,
     cross_mount_points: bool,
     include_zero_files: bool,
     include_empty_folders: bool,
@@ -261,13 +271,19 @@ fn traverse_directory_to_xml(
                 &entry_path,
                 false,
                 root_dev,
+                apparent_size_flag,
                 cross_mount_points,
                 include_zero_files,
                 include_empty_folders,
             )?;
         } else if file_type.is_file() {
             // Process file entries
-            process_file_entry(&entry_path, &entry_metadata, include_zero_files);
+            process_file_entry(
+                &entry_path,
+                &entry_metadata,
+                include_zero_files,
+                apparent_size_flag,
+            );
         } else {
             // Handle other file types
             eprintln!("[gpscan] Unknown file type: {}", entry_path.display());
@@ -279,8 +295,55 @@ fn traverse_directory_to_xml(
     Ok(())
 }
 
+fn try_bytes_from_path(path: &Path, apparent_size_flag: bool) -> u64 {
+    match path.symlink_metadata() {
+        #[cfg(any(target_os = "freebsd", target_os = "linux"))]
+        Ok(metadata) => {
+            if apparent_size_flag {
+                metadata.st_size() as u64
+            } else {
+                metadata.st_blocks() as u64 * 512
+            }
+        }
+        #[cfg(target_os = "macos")]
+        Ok(metadata) => {
+            if apparent_size_flag {
+                metadata.size() as u64
+            } else {
+                metadata.blocks() as u64 * 512
+            }
+        }
+        #[cfg(target_os = "windows")]
+        Ok(metadata) => {
+            if apparent_size_flag {
+                metadata.len()
+            } else {
+                // Note: On Windows, the physical size is not available.
+                eprintln!(
+                    "[gpscan] Warning: Using logical volume size. Physical size is not available on Windows."
+                );
+                metadata.len()
+            }
+        }
+        Err(err) => {
+            eprintln!(
+                "[gpscan] Error: Failed to access metadata for '{}': {} ({:?})",
+                path.display(),
+                err,
+                err.kind()
+            );
+            0
+        }
+    }
+}
+
 /// Processes a file entry and outputs XML.
-fn process_file_entry(path: &Path, metadata: &Metadata, include_zero_files: bool) {
+fn process_file_entry(
+    path: &Path,
+    metadata: &Metadata,
+    include_zero_files: bool,
+    apparent_size_flag: bool,
+) {
     // Get file name
     let name = path
         .file_name()
@@ -288,8 +351,8 @@ fn process_file_entry(path: &Path, metadata: &Metadata, include_zero_files: bool
         .to_string_lossy()
         .to_string();
 
-    // Get file size
-    let size = metadata.len();
+    // Get physical file size
+    let size = try_bytes_from_path(path, apparent_size_flag);
 
     // Skip zero-byte files if the `include_zero_files` option is not set
     if size == 0 && !include_zero_files {

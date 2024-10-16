@@ -25,6 +25,13 @@ pub fn parse_args() -> ArgMatches {
                 .required(true),
         )
         .arg(
+            Arg::new("apparent-size")
+                .short('A')
+                .long("apparent-size")
+                .help("Use apparent size instead of disk usage [false]")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
             Arg::new("mounts")
                 .short('m')
                 .long("mounts")
