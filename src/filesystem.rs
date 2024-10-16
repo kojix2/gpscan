@@ -1,10 +1,11 @@
 // External crates
 use chrono::{DateTime, Utc};
 use clap::ArgMatches;
-use std::collections::HashSet;
 use sysinfo::Disks;
 
 // Standard library imports
+use std::cmp::Reverse;
+use std::collections::HashSet;
 use std::fs::{self, Metadata};
 use std::io;
 #[cfg(target_os = "linux")]
@@ -156,8 +157,12 @@ fn get_volume_info(root_path: &Path, disks: &Disks) -> (String, u64, u64) {
             std::path::PathBuf::from(abs_root_path.to_string_lossy().replacen(r"\\?\", "", 1));
     }
 
-    // Find the disk that contains the root_path
-    for disk in disks.iter() {
+    // Collect and sort disks by the depth of their mount points (in descending order)
+    let mut disks: Vec<_> = disks.iter().collect();
+    disks.sort_by_key(|disk| Reverse(disk.mount_point().components().count()));
+
+    // Find the first matching disk
+    for disk in disks {
         let mount_point = disk.mount_point();
 
         if abs_root_path.starts_with(mount_point) {
