@@ -18,6 +18,24 @@ use crate::xml::xml_escape;
 const GRANDPERSPECTIVE_APP_VERSION: &str = "4";
 const GRANDPERSPECTIVE_FORMAT_VERSION: &str = "7";
 
+pub struct Options {
+    apparent_size: bool,
+    cross_mount_points: bool,
+    include_zero_files: bool,
+    include_empty_folders: bool,
+}
+
+impl Options {
+    pub fn from_matches(matches: &ArgMatches) -> Self {
+        Options {
+            apparent_size: matches.get_flag("apparent-size"),
+            cross_mount_points: matches.get_flag("mounts"),
+            include_zero_files: matches.get_flag("include-zero-files"),
+            include_empty_folders: matches.get_flag("include-empty-folders"),
+        }
+    }
+}
+
 /// Runs the main logic of the program.
 pub fn run(matches: ArgMatches) -> io::Result<()> {
     // Get the directory path from arguments
@@ -47,10 +65,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     }
 
     // Get option values
-    let apparent_size_flag = matches.get_flag("apparent-size");
-    let cross_mount_points = matches.get_flag("mounts");
-    let include_zero_files = matches.get_flag("include-zero-files");
-    let include_empty_folders = matches.get_flag("include-empty-folders");
+    let option = Options::from_matches(&matches);
 
     // Get the device ID of the root directory
     let root_metadata = fs::metadata(root_path)?;
@@ -81,16 +96,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     let mut visited_inodes = HashSet::new();
 
     // Start traversing the directory with new options
-    traverse_directory_to_xml(
-        root_path,
-        true,
-        root_dev,
-        apparent_size_flag,
-        cross_mount_points,
-        include_zero_files,
-        include_empty_folders,
-        &mut visited_inodes,
-    )?;
+    traverse_directory_to_xml(root_path, true, root_dev, &option, &mut visited_inodes)?;
 
     // Close XML tags
     println!("</ScanInfo>");
@@ -144,10 +150,7 @@ fn traverse_directory_to_xml(
     path: &Path,
     is_root: bool,
     root_dev: u64,
-    apparent_size_flag: bool,
-    cross_mount_points: bool,
-    include_zero_files: bool,
-    include_empty_folders: bool,
+    options: &Options,
     visited_inodes: &mut HashSet<u64>,
 ) -> io::Result<()> {
     // Get metadata of the current directory
@@ -164,7 +167,7 @@ fn traverse_directory_to_xml(
     };
 
     // Check if the current directory is on a different filesystem
-    if !cross_mount_points {
+    if !options.cross_mount_points {
         let current_dev = metadata.device_id();
 
         if current_dev != root_dev {
@@ -217,7 +220,7 @@ fn traverse_directory_to_xml(
     };
 
     // Check if the folder is empty and should be skipped
-    if entries.is_empty() && !include_empty_folders {
+    if entries.is_empty() && !options.include_empty_folders {
         eprintln!("[gpscan] Skipping empty folder: {}", path.display());
         return Ok(());
     }
@@ -263,25 +266,10 @@ fn traverse_directory_to_xml(
             continue;
         } else if file_type.is_dir() {
             // Recursively traverse directories
-            traverse_directory_to_xml(
-                &entry_path,
-                false,
-                root_dev,
-                apparent_size_flag,
-                cross_mount_points,
-                include_zero_files,
-                include_empty_folders,
-                visited_inodes,
-            )?;
+            traverse_directory_to_xml(&entry_path, false, root_dev, options, visited_inodes)?;
         } else if file_type.is_file() {
             // Process file entries
-            process_file_entry(
-                &entry_path,
-                &entry_metadata,
-                include_zero_files,
-                apparent_size_flag,
-                visited_inodes,
-            );
+            process_file_entry(&entry_path, &entry_metadata, options, visited_inodes);
         } else {
             // Handle other file types
             eprintln!("[gpscan] Unknown file type: {}", entry_path.display());
@@ -297,8 +285,7 @@ fn traverse_directory_to_xml(
 fn process_file_entry(
     path: &Path,
     metadata: &Metadata,
-    include_zero_files: bool,
-    apparent_size_flag: bool,
+    options: &Options,
     visited_inodes: &mut HashSet<u64>,
 ) {
     // Get inode number
@@ -321,10 +308,10 @@ fn process_file_entry(
         .to_string();
 
     // Get physical file size
-    let size = metadata.file_size(apparent_size_flag);
+    let size = metadata.file_size(options.apparent_size);
 
     // Skip zero-byte files if the `include_zero_files` option is not set
-    if size == 0 && !include_zero_files {
+    if size == 0 && !options.include_zero_files {
         eprintln!("[gpscan] Skipping zero-byte file: {}", path.display());
         return;
     }
