@@ -8,57 +8,15 @@ use std::cmp::Reverse;
 use std::collections::HashSet;
 use std::fs::{self, Metadata};
 use std::io;
-#[cfg(target_os = "linux")]
-use std::os::linux::fs::MetadataExt;
-#[cfg(any(target_os = "freebsd", target_os = "macos"))]
-use std::os::unix::fs::MetadataExt;
-#[cfg(target_os = "windows")]
-use std::os::windows::fs::MetadataExt;
 use std::path::Path;
 use std::time::SystemTime;
 
+use crate::platform::MetadataExtOps; // Ensure this trait is implemented for Metadata
 use crate::xml::xml_escape;
 
 // Constants representing GrandPerspective version information
 const GRANDPERSPECTIVE_APP_VERSION: &str = "4";
 const GRANDPERSPECTIVE_FORMAT_VERSION: &str = "7";
-
-// Retrieves the device ID from metadata (Linux).
-#[cfg(target_os = "linux")]
-fn get_device_id(metadata: &Metadata) -> u64 {
-    metadata.st_dev()
-}
-
-// Retrieves the device ID from metadata (Unix).
-#[cfg(any(target_os = "freebsd", target_os = "macos"))]
-fn get_device_id(metadata: &Metadata) -> u64 {
-    metadata.dev()
-}
-
-// Retrieves the device ID from metadata (Windows).
-#[cfg(windows)]
-fn get_device_id(metadata: &Metadata) -> u64 {
-    metadata.volume_serial_number().unwrap_or(0) as u64
-}
-
-// Retrieves the inode number from metadata (Linux).
-#[cfg(target_os = "linux")]
-fn get_inode_number(metadata: &Metadata) -> u64 {
-    metadata.st_ino()
-}
-
-// Retrieves the inode number from metadata (Unix).
-#[cfg(any(target_os = "freebsd", target_os = "macos"))]
-fn get_inode_number(metadata: &Metadata) -> u64 {
-    metadata.ino()
-}
-
-// Retrieves the inode number from metadata (Windows).
-#[cfg(target_os = "windows")]
-fn get_inode_number(metadata: &Metadata) -> u64 {
-    // Note: Windows does not have inodes. Use the file index instead.
-    metadata.file_index().unwrap_or(0)
-}
 
 /// Runs the main logic of the program.
 pub fn run(matches: ArgMatches) -> io::Result<()> {
@@ -96,7 +54,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
 
     // Get the device ID of the root directory
     let root_metadata = fs::metadata(root_path)?;
-    let root_dev = get_device_id(&root_metadata);
+    let root_dev = root_metadata.device_id();
 
     // Create Disks instance and refresh disk list
     let disks = Disks::new_with_refreshed_list();
@@ -207,7 +165,7 @@ fn traverse_directory_to_xml(
 
     // Check if the current directory is on a different filesystem
     if !cross_mount_points {
-        let current_dev = get_device_id(&metadata);
+        let current_dev = metadata.device_id();
 
         if current_dev != root_dev {
             eprintln!(
@@ -328,48 +286,6 @@ fn traverse_directory_to_xml(
     Ok(())
 }
 
-fn try_bytes_from_path(path: &Path, apparent_size_flag: bool) -> u64 {
-    match path.symlink_metadata() {
-        #[cfg(any(target_os = "freebsd", target_os = "linux"))]
-        Ok(metadata) => {
-            if apparent_size_flag {
-                metadata.st_size() as u64
-            } else {
-                metadata.st_blocks() as u64 * 512
-            }
-        }
-        #[cfg(target_os = "macos")]
-        Ok(metadata) => {
-            if apparent_size_flag {
-                metadata.size() as u64
-            } else {
-                metadata.blocks() as u64 * 512
-            }
-        }
-        #[cfg(target_os = "windows")]
-        Ok(metadata) => {
-            if apparent_size_flag {
-                metadata.len()
-            } else {
-                // Note: On Windows, the physical size is not available.
-                eprintln!(
-                    "[gpscan] Warning: Using logical volume size. Physical size is not available on Windows."
-                );
-                metadata.len()
-            }
-        }
-        Err(err) => {
-            eprintln!(
-                "[gpscan] Error: Failed to access metadata for '{}': {} ({:?})",
-                path.display(),
-                err,
-                err.kind()
-            );
-            0
-        }
-    }
-}
-
 /// Processes a file entry and outputs XML.
 fn process_file_entry(
     path: &Path,
@@ -379,7 +295,7 @@ fn process_file_entry(
     visited_inodes: &mut HashSet<u64>,
 ) {
     // Get inode number
-    let inode = get_inode_number(metadata);
+    let inode = metadata.inode_number();
 
     // Skip if the file is a hard link
     if visited_inodes.contains(&inode) {
@@ -398,7 +314,7 @@ fn process_file_entry(
         .to_string();
 
     // Get physical file size
-    let size = try_bytes_from_path(path, apparent_size_flag);
+    let size = metadata.file_size(apparent_size_flag);
 
     // Skip zero-byte files if the `include_zero_files` option is not set
     if size == 0 && !include_zero_files {
