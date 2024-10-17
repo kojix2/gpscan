@@ -1,18 +1,20 @@
 // External crates
 use chrono::{DateTime, Utc};
 use clap::ArgMatches;
+use quick_xml::escape::escape;
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, Event};
+use quick_xml::writer::Writer;
 use sysinfo::Disks;
 
 // Standard library imports
 use std::cmp::Reverse;
 use std::collections::HashSet;
 use std::fs::{self, Metadata};
-use std::io;
+use std::io::{self, Write};
 use std::path::Path;
 use std::time::SystemTime;
 
 use crate::platform::MetadataExtOps; // Ensure this trait is implemented for Metadata
-use crate::xml::xml_escape;
 
 // Constants representing GrandPerspective version information
 const GRANDPERSPECTIVE_APP_VERSION: &str = "4";
@@ -77,30 +79,47 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     // Get volume information
     let (volume_path, volume_size, free_space) = get_volume_info(root_path, &disks);
 
-    // Output XML header
-    println!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
-    println!(
-        r#"<GrandPerspectiveScanDump appVersion="{}" formatVersion="{}">"#,
-        GRANDPERSPECTIVE_APP_VERSION, GRANDPERSPECTIVE_FORMAT_VERSION
-    );
+    // Output XML to stdout
+    let stdout = io::stdout();
+    let handle = stdout.lock(); // Lock the stdout handle
+    let mut writer = Writer::new_with_indent(handle, b' ', 0);
+
+    // Output the XML header and start tag
+    output_xml_header(&mut writer)?;
+
+    // Output the scan information
     let scan_time = Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
-    println!(
-        r#"<ScanInfo volumePath="{}" volumeSize="{}" freeSpace="{}" scanTime="{}" fileSizeMeasure="physical">"#,
-        xml_escape(&volume_path),
-        volume_size,
-        free_space,
-        scan_time
-    );
+    let mut scan_info = BytesStart::new("ScanInfo");
+    scan_info.push_attribute(("volumePath", escape(&volume_path).as_ref()));
+    scan_info.push_attribute(("volumeSize", volume_size.to_string().as_str()));
+    scan_info.push_attribute(("freeSpace", free_space.to_string().as_str()));
+    scan_info.push_attribute(("scanTime", scan_time.to_string().as_str()));
+    scan_info.push_attribute(("fileSizeMeasure", "physical"));
+    writer
+        .write_event(Event::Start(scan_info))
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
     // Create a set to store visited inodes
     let mut visited_inodes = HashSet::new();
 
     // Start traversing the directory with new options
-    traverse_directory_to_xml(root_path, true, root_dev, &option, &mut visited_inodes)?;
+    traverse_directory_to_xml(
+        root_path,
+        true,
+        root_dev,
+        &option,
+        &mut visited_inodes,
+        &mut writer,
+    )?;
 
-    // Close XML tags
-    println!("</ScanInfo>");
-    println!("</GrandPerspectiveScanDump>");
+    // </ScanInfo> tag
+    writer
+        .write_event(Event::End(BytesEnd::new("ScanInfo")))
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    // </GrandPerspectiveScanDump> tag
+    writer
+        .write_event(Event::End(BytesEnd::new("GrandPerspectiveScanDump")))
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
     Ok(())
 }
@@ -145,13 +164,27 @@ fn get_volume_info(root_path: &Path, disks: &Disks) -> (String, u64, u64) {
     )
 }
 
+fn output_xml_header<W: Write>(writer: &mut Writer<W>) -> io::Result<()> {
+    writer
+        .write_event(Event::Decl(BytesDecl::new("1.0", Some("UTF-8"), None)))
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    let mut root = BytesStart::new("GrandPerspectiveScanDump");
+    root.push_attribute(("appVersion", GRANDPERSPECTIVE_APP_VERSION));
+    root.push_attribute(("formatVersion", GRANDPERSPECTIVE_FORMAT_VERSION));
+    writer
+        .write_event(Event::Start(root))
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    Ok(())
+}
+
 /// Recursively traverses the directory and outputs XML.
-fn traverse_directory_to_xml(
+fn traverse_directory_to_xml<W: Write>(
     path: &Path,
     is_root: bool,
     root_dev: u64,
     options: &Options,
     visited_inodes: &mut HashSet<u64>,
+    writer: &mut Writer<W>,
 ) -> io::Result<()> {
     // Get metadata of the current directory
     let metadata = match fs::metadata(path) {
@@ -233,13 +266,14 @@ fn traverse_directory_to_xml(
     });
 
     // Output Folder tag
-    println!(
-        r#"<Folder name="{}" created="{}" modified="{}" accessed="{}">"#,
-        xml_escape(&name),
-        created,
-        modified,
-        accessed
-    );
+    let mut folder_tag = BytesStart::new("Folder");
+    folder_tag.push_attribute(("name", escape(&name).as_ref()));
+    folder_tag.push_attribute(("created", created.as_str()));
+    folder_tag.push_attribute(("modified", modified.as_str()));
+    folder_tag.push_attribute(("accessed", accessed.as_str()));
+    writer
+        .write_event(Event::Start(folder_tag))
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
     // Iterate over directory entries
     for entry in entries {
@@ -266,10 +300,23 @@ fn traverse_directory_to_xml(
             continue;
         } else if file_type.is_dir() {
             // Recursively traverse directories
-            traverse_directory_to_xml(&entry_path, false, root_dev, options, visited_inodes)?;
+            traverse_directory_to_xml(
+                &entry_path,
+                false,
+                root_dev,
+                options,
+                visited_inodes,
+                writer,
+            )?;
         } else if file_type.is_file() {
             // Process file entries
-            process_file_entry(&entry_path, &entry_metadata, options, visited_inodes);
+            process_file_entry(
+                &entry_path,
+                &entry_metadata,
+                options,
+                visited_inodes,
+                writer,
+            )?;
         } else {
             // Handle other file types
             eprintln!("[gpscan] Unknown file type: {}", entry_path.display());
@@ -277,24 +324,27 @@ fn traverse_directory_to_xml(
     }
 
     // Close Folder tag
-    println!("</Folder>");
+    writer
+        .write_event(Event::End(BytesEnd::new("Folder")))
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
     Ok(())
 }
 
 /// Processes a file entry and outputs XML.
-fn process_file_entry(
+fn process_file_entry<W: Write>(
     path: &Path,
     metadata: &Metadata,
     options: &Options,
     visited_inodes: &mut HashSet<u64>,
-) {
+    writer: &mut Writer<W>,
+) -> io::Result<()> {
     // Get inode number
     let inode = metadata.inode_number();
 
     // Skip if the file is a hard link
     if visited_inodes.contains(&inode) {
         eprintln!("[gpscan] Skipping hard link file: {}", path.display());
-        return;
+        return Ok(());
     }
 
     // Add inode number to the set of visited inodes
@@ -313,21 +363,24 @@ fn process_file_entry(
     // Skip zero-byte files if the `include_zero_files` option is not set
     if size == 0 && !options.include_zero_files {
         eprintln!("[gpscan] Skipping zero-byte file: {}", path.display());
-        return;
+        return Ok(());
     }
 
     // Get file times
     let (created, modified, accessed) = get_file_times(metadata);
 
     // Output File tag
-    println!(
-        r#"<File name="{}" size="{}" created="{}" modified="{}" accessed="{}" />"#,
-        xml_escape(&name),
-        size,
-        created,
-        modified,
-        accessed
-    );
+    let mut file_tag = BytesStart::new("File");
+    file_tag.push_attribute(("name", escape(&name).as_ref()));
+    file_tag.push_attribute(("size", size.to_string().as_str()));
+    file_tag.push_attribute(("created", created.as_str()));
+    file_tag.push_attribute(("modified", modified.as_str()));
+    file_tag.push_attribute(("accessed", accessed.as_str()));
+    writer
+        .write_event(Event::Empty(file_tag))
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+    Ok(())
 }
 
 /// Retrieves creation, modification, and access times from metadata.
