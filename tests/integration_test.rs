@@ -67,6 +67,9 @@ fn test_gpscan_output() {
     let output = cmd.output().expect("Failed to execute gpscan");
     let xml_output = String::from_utf8_lossy(&output.stdout);
 
+    // Debug print the XML output
+    println!("{}", xml_output);
+
     // Check if the XML output contains expected entries for non-empty files and folders
     assert!(
         predicate::str::contains(r#"<File name="file1.txt""#).eval(&xml_output),

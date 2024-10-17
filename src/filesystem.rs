@@ -192,7 +192,7 @@ fn traverse_directory_to_xml(
     };
 
     // Read directory entries and count items
-    let entries: Vec<_> = match fs::read_dir(path) {
+    let mut entries: Vec<_> = match fs::read_dir(path) {
         Ok(read_dir) => read_dir
             .filter_map(|entry| match entry {
                 Ok(e) => Some(e),
@@ -221,6 +221,13 @@ fn traverse_directory_to_xml(
         eprintln!("[gpscan] Skipping empty folder: {}", path.display());
         return Ok(());
     }
+
+    // Sort entries by file name
+    entries.sort_by(|a, b| {
+        a.file_name()
+            .to_string_lossy()
+            .cmp(&b.file_name().to_string_lossy())
+    });
 
     // Output Folder tag
     println!(
