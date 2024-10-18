@@ -79,9 +79,18 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     // Get volume information
     let (volume_path, volume_size, free_space) = get_volume_info(root_path, &disks);
 
-    // Output XML to stdout
-    let stdout = io::stdout();
-    let handle = stdout.lock(); // Lock the stdout handle
+    // Determine output destination
+    let output = matches.get_one::<String>("output");
+
+    // Create a write handle
+    let handle: Box<dyn Write> = match output {
+        Some(file) => {
+            let file = fs::File::create(file)?;
+            Box::new(file)
+        }
+        None => Box::new(io::stdout()),
+    };
+
     let mut writer = Writer::new_with_indent(handle, b' ', 0);
 
     // Output the XML header and start tag

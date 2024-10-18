@@ -25,6 +25,14 @@ pub fn parse_args() -> ArgMatches {
                 .required(true),
         )
         .arg(
+            Arg::new("output")
+                .short('o')
+                .long("output")
+                .value_name("FILE")
+                .help("Output file (default: stdout)")
+                .num_args(1),
+        )
+        .arg(
             Arg::new("apparent-size")
                 .short('A')
                 .long("apparent-size")

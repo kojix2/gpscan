@@ -144,3 +144,72 @@ fn test_gpscan_output() {
         "XML output does not contain empty_dir"
     );
 }
+
+#[test]
+fn test_gpscan_with_output_file() {
+    let temp_dir = TempDir::new("gpscan_test_output").expect("Failed to create temp dir");
+    let dir_path = temp_dir.path();
+
+    // Create a sample file
+    let mut file1 = File::create(dir_path.join("file1.txt")).expect("Failed to create file1");
+    writeln!(file1, "Content for file1").expect("Failed to write to file1");
+
+    // Specify an output file
+    let output_file_path = dir_path.join("output.xml");
+
+    // Run `gpscan` with an output file specified
+    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    cmd.arg(dir_path.to_str().unwrap())
+        .arg("-o")
+        .arg(output_file_path.to_str().unwrap());
+    cmd.assert().success();
+
+    // Read and verify the output from the specified file
+    let output_xml = fs::read_to_string(output_file_path).expect("Failed to read output file");
+    assert!(
+        predicate::str::contains(r#"<File name="file1.txt""#).eval(&output_xml),
+        "Output file XML does not contain file1.txt"
+    );
+
+    // Ensure correct XML structure
+    assert!(
+        predicate::str::starts_with(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<GrandPerspectiveScanDump"#
+        )
+        .eval(&output_xml),
+        "Output file does not start with correct XML declaration and root"
+    );
+    assert!(
+        predicate::str::ends_with("</GrandPerspectiveScanDump>").eval(&output_xml.trim_end()),
+        "Output file XML does not end with </GrandPerspectiveScanDump>"
+    );
+}
+
+#[test]
+fn test_gpscan_invalid_output_path() {
+    let temp_dir = TempDir::new("gpscan_invalid_output").expect("Failed to create temp dir");
+    let dir_path = temp_dir.path();
+
+    // Create a sample file
+    File::create(dir_path.join("file1.txt")).expect("Failed to create file1");
+
+    // Specify an invalid output file path (e.g., a directory path)
+    let invalid_output_path = dir_path.join("nonexistent_directory/output.xml");
+
+    // Run `gpscan` with an invalid output file path
+    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    cmd.arg(dir_path.to_str().unwrap())
+        .arg("-o")
+        .arg(invalid_output_path.to_str().unwrap());
+
+    // Adjust expectation to match the os error message structure
+    #[cfg(target_os = "windows")]
+    let expected_error = "The system cannot find the path specified";
+    #[cfg(not(target_os = "windows"))]
+    let expected_error = "No such file or directory";
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains(expected_error));
+}
