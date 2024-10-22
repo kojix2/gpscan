@@ -6,9 +6,6 @@ use std::os::unix::fs::MetadataExt;
 #[cfg(target_os = "windows")]
 use std::os::windows::fs::MetadataExt;
 
-#[cfg(target_os = "windows")]
-use log::warn;
-
 pub trait MetadataExtOps {
     fn device_id(&self) -> u64;
     fn inode_number(&self) -> u64;
@@ -68,8 +65,7 @@ impl MetadataExtOps for Metadata {
         if apparent {
             self.len()
         } else {
-            // Physical size is unavailable on Windows, so output a warning
-            warn!("Using logical size as physical size is unavailable on Windows.");
+            // FIXME: Physical size is unavailable on Windows.
             self.len()
         }
     }
