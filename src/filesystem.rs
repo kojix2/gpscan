@@ -140,6 +140,21 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     Ok(())
 }
 
+/// Reads the contents of a directory and returns a vector of directory entries.
+fn read_directory(path: &Path) -> io::Result<Vec<fs::DirEntry>> {
+    match fs::read_dir(path) {
+        Ok(read_dir) => read_dir.collect::<Result<Vec<_>, io::Error>>(),
+        Err(e) => {
+            eprintln!(
+                "[gpscan] Error: Failed to read directory '{}': {}",
+                path.display(),
+                e
+            );
+            Err(e)
+        }
+    }
+}
+
 /// Retrieves volume information for the given path.
 fn get_volume_info(root_path: &Path, disks: &Disks) -> (String, u64, u64) {
     // Convert root_path to absolute path
@@ -247,29 +262,10 @@ fn traverse_directory_to_xml<W: Write>(
             .to_string()
     };
 
-    // Read directory entries and count items
-    let mut entries: Vec<_> = match fs::read_dir(path) {
-        Ok(read_dir) => read_dir
-            .filter_map(|entry| match entry {
-                Ok(e) => Some(e),
-                Err(e) => {
-                    eprintln!(
-                        "[gpscan] Error: Failed to read directory entry in '{}': {}",
-                        path.display(),
-                        e
-                    );
-                    None
-                }
-            })
-            .collect(),
-        Err(e) => {
-            eprintln!(
-                "[gpscan] Error: Failed to read directory '{}': {}",
-                path.display(),
-                e
-            );
-            return Ok(());
-        }
+    // Read directory entries
+    let mut entries: Vec<_> = match read_directory(path) {
+        Ok(entries) => entries,
+        Err(_) => return Ok(()),
     };
 
     // Check if the folder is empty and should be skipped
