@@ -60,6 +60,13 @@ pub fn parse_args() -> ArgMatches {
                 .help("Include empty folders in scan [false]")
                 .action(clap::ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("quiet")
+                .short('q')
+                .long("quiet")
+                .help("Suppress all informational messages [false]")
+                .action(clap::ArgAction::SetTrue),
+        )
         .arg_required_else_help(true)
         .get_matches()
 }

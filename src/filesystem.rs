@@ -1,6 +1,7 @@
 // External crates
 use chrono::{DateTime, Utc};
 use clap::ArgMatches;
+use log::{error, info, warn};
 use quick_xml::escape::escape;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, Event};
 use quick_xml::writer::Writer;
@@ -57,17 +58,14 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
 
     // Check if the provided path exists
     if !root_path.exists() {
-        eprintln!(
-            "[gpscan] Error: The specified path does not exist: {}",
-            root_path.display()
-        );
+        error!("The specified path does not exist: {}", root_path.display());
         std::process::exit(1); // Exit code 1 for non-existent path
     }
 
     // Check if the provided path is a directory
     if !root_path.is_dir() {
-        eprintln!(
-            "[gpscan] Error: The specified path is not a directory: {}",
+        error!(
+            "The specified path is not a directory: {}",
             root_path.display()
         );
         std::process::exit(1); // Exit code 1 for invalid directory
@@ -145,11 +143,7 @@ fn read_directory(path: &Path) -> io::Result<Vec<fs::DirEntry>> {
     match fs::read_dir(path) {
         Ok(read_dir) => read_dir.collect::<Result<Vec<_>, io::Error>>(),
         Err(e) => {
-            eprintln!(
-                "[gpscan] Error: Failed to read directory '{}': {}",
-                path.display(),
-                e
-            );
+            error!("Failed to read directory '{}': {}", path.display(), e);
             Err(e)
         }
     }
@@ -159,11 +153,7 @@ fn get_metadata(path: &Path) -> io::Result<Metadata> {
     match fs::metadata(path) {
         Ok(metadata) => Ok(metadata),
         Err(e) => {
-            eprintln!(
-                "[gpscan] Error: Failed to access metadata for '{}': {}",
-                path.display(),
-                e
-            );
+            error!("Failed to access metadata for '{}': {}", path.display(), e);
             Err(e)
         }
     }
@@ -246,8 +236,8 @@ fn traverse_directory_to_xml<W: Write>(
         let current_dev = metadata.device_id();
 
         if current_dev != root_dev {
-            eprintln!(
-                "[gpscan] Skipping directory on different filesystem: {} (root: {}, current: {})",
+            info!(
+                "Skipping directory on different filesystem: {} (root: {}, current: {})",
                 path.display(),
                 root_dev,
                 current_dev
@@ -277,7 +267,7 @@ fn traverse_directory_to_xml<W: Write>(
 
     // Check if the folder is empty and should be skipped
     if entries.is_empty() && !options.include_empty_folders {
-        eprintln!("[gpscan] Skipping empty folder: {}", path.display());
+        info!("Skipping empty folder: {}", path.display());
         return Ok(());
     }
 
@@ -306,8 +296,8 @@ fn traverse_directory_to_xml<W: Write>(
         let entry_metadata = match fs::symlink_metadata(&entry_path) {
             Ok(m) => m,
             Err(e) => {
-                eprintln!(
-                    "[gpscan] Error: Failed to access metadata for '{}': {}",
+                error!(
+                    "Failed to access metadata for '{}': {}",
                     entry_path.display(),
                     e
                 );
@@ -319,7 +309,7 @@ fn traverse_directory_to_xml<W: Write>(
 
         if file_type.is_symlink() {
             // Skip symbolic links
-            eprintln!("[gpscan] Skipping symbolic link: {}", entry_path.display());
+            info!("Skipping symbolic link: {}", entry_path.display());
             continue;
         } else if file_type.is_dir() {
             // Recursively traverse directories
@@ -342,7 +332,7 @@ fn traverse_directory_to_xml<W: Write>(
             )?;
         } else {
             // Handle other file types
-            eprintln!("[gpscan] Unknown file type: {}", entry_path.display());
+            warn!("Unknown file type: {}", entry_path.display());
         }
     }
 
@@ -366,7 +356,7 @@ fn process_file_entry<W: Write>(
 
     // Skip if the file is a hard link
     if visited_inodes.contains(&inode) {
-        eprintln!("[gpscan] Skipping hard link file: {}", path.display());
+        info!("Skipping hard link file: {}", path.display());
         return Ok(());
     }
 
@@ -385,7 +375,7 @@ fn process_file_entry<W: Write>(
 
     // Skip zero-byte files if the `include_zero_files` option is not set
     if size == 0 && !options.include_zero_files {
-        eprintln!("[gpscan] Skipping zero-byte file: {}", path.display());
+        info!("Skipping zero-byte file: {}", path.display());
         return Ok(());
     }
 
