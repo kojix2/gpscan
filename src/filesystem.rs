@@ -406,19 +406,21 @@ fn process_file_entry<W: Write>(
     Ok(())
 }
 
-/// Retrieves creation, modification, and access times from metadata.
-fn get_file_times(metadata: &Metadata) -> (String, String, String) {
-    let format_time = |sys_time: Result<SystemTime, std::io::Error>| match sys_time {
+fn format_system_time(sys_time: Result<SystemTime, io::Error>) -> String {
+    match sys_time {
         Ok(t) => {
             let datetime: DateTime<Utc> = t.into();
             datetime.format("%Y-%m-%dT%H:%M:%SZ").to_string()
         }
         Err(_) => DEFAULT_DATETIME.to_string(),
-    };
+    }
+}
 
-    let created = format_time(metadata.created());
-    let modified = format_time(metadata.modified());
-    let accessed = format_time(metadata.accessed());
+/// Retrieves creation, modification, and access times from metadata.
+fn get_file_times(metadata: &Metadata) -> (String, String, String) {
+    let created = format_system_time(metadata.created());
+    let modified = format_system_time(metadata.modified());
+    let accessed = format_system_time(metadata.accessed());
 
     (created, modified, accessed)
 }
