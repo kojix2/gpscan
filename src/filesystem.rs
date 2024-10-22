@@ -16,9 +16,16 @@ use std::time::SystemTime;
 
 use crate::platform::MetadataExtOps; // Ensure this trait is implemented for Metadata
 
-// Constants representing GrandPerspective version information
+// Constants for XML output
 const GRANDPERSPECTIVE_APP_VERSION: &str = "4";
 const GRANDPERSPECTIVE_FORMAT_VERSION: &str = "7";
+const XML_VERSION: &str = "1.0";
+const XML_ENCODING: &str = "UTF-8";
+const DEFAULT_DATETIME: &str = "1970-01-01T00:00:00Z";
+const TAG_SCAN_INFO: &str = "ScanInfo";
+const TAG_GRANDPERSPECTIVE_SCAN_DUMP: &str = "GrandPerspectiveScanDump";
+const TAG_FOLDER: &str = "Folder";
+const TAG_FILE: &str = "File";
 
 pub struct Options {
     apparent_size: bool,
@@ -98,7 +105,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
 
     // Output the scan information
     let scan_time = Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
-    let mut scan_info = BytesStart::new("ScanInfo");
+    let mut scan_info = BytesStart::new(TAG_SCAN_INFO);
     scan_info.push_attribute(("volumePath", escape(&volume_path).as_ref()));
     scan_info.push_attribute(("volumeSize", volume_size.to_string().as_str()));
     scan_info.push_attribute(("freeSpace", free_space.to_string().as_str()));
@@ -123,11 +130,11 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
 
     // </ScanInfo> tag
     writer
-        .write_event(Event::End(BytesEnd::new("ScanInfo")))
+        .write_event(Event::End(BytesEnd::new(TAG_SCAN_INFO)))
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
     // </GrandPerspectiveScanDump> tag
     writer
-        .write_event(Event::End(BytesEnd::new("GrandPerspectiveScanDump")))
+        .write_event(Event::End(BytesEnd::new(TAG_GRANDPERSPECTIVE_SCAN_DUMP)))
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
     Ok(())
@@ -175,9 +182,13 @@ fn get_volume_info(root_path: &Path, disks: &Disks) -> (String, u64, u64) {
 
 fn output_xml_header<W: Write>(writer: &mut Writer<W>) -> io::Result<()> {
     writer
-        .write_event(Event::Decl(BytesDecl::new("1.0", Some("UTF-8"), None)))
+        .write_event(Event::Decl(BytesDecl::new(
+            XML_VERSION,
+            Some(XML_ENCODING),
+            None,
+        )))
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    let mut root = BytesStart::new("GrandPerspectiveScanDump");
+    let mut root = BytesStart::new(TAG_GRANDPERSPECTIVE_SCAN_DUMP);
     root.push_attribute(("appVersion", GRANDPERSPECTIVE_APP_VERSION));
     root.push_attribute(("formatVersion", GRANDPERSPECTIVE_FORMAT_VERSION));
     writer
@@ -275,7 +286,7 @@ fn traverse_directory_to_xml<W: Write>(
     });
 
     // Output Folder tag
-    let mut folder_tag = BytesStart::new("Folder");
+    let mut folder_tag = BytesStart::new(TAG_FOLDER);
     folder_tag.push_attribute(("name", escape(&name).as_ref()));
     folder_tag.push_attribute(("created", created.as_str()));
     folder_tag.push_attribute(("modified", modified.as_str()));
@@ -334,7 +345,7 @@ fn traverse_directory_to_xml<W: Write>(
 
     // Close Folder tag
     writer
-        .write_event(Event::End(BytesEnd::new("Folder")))
+        .write_event(Event::End(BytesEnd::new(TAG_FOLDER)))
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
     Ok(())
 }
@@ -379,7 +390,7 @@ fn process_file_entry<W: Write>(
     let (created, modified, accessed) = get_file_times(metadata);
 
     // Output File tag
-    let mut file_tag = BytesStart::new("File");
+    let mut file_tag = BytesStart::new(TAG_FILE);
     file_tag.push_attribute(("name", escape(&name).as_ref()));
     file_tag.push_attribute(("size", size.to_string().as_str()));
     file_tag.push_attribute(("created", created.as_str()));
@@ -399,7 +410,7 @@ fn get_file_times(metadata: &Metadata) -> (String, String, String) {
             let datetime: DateTime<Utc> = t.into();
             datetime.format("%Y-%m-%dT%H:%M:%SZ").to_string()
         }
-        Err(_) => "1970-01-01T00:00:00Z".to_string(),
+        Err(_) => DEFAULT_DATETIME.to_string(),
     };
 
     let created = format_time(metadata.created());
