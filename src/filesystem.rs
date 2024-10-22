@@ -155,6 +155,20 @@ fn read_directory(path: &Path) -> io::Result<Vec<fs::DirEntry>> {
     }
 }
 
+fn get_metadata(path: &Path) -> io::Result<Metadata> {
+    match fs::metadata(path) {
+        Ok(metadata) => Ok(metadata),
+        Err(e) => {
+            eprintln!(
+                "[gpscan] Error: Failed to access metadata for '{}': {}",
+                path.display(),
+                e
+            );
+            Err(e)
+        }
+    }
+}
+
 /// Retrieves volume information for the given path.
 fn get_volume_info(root_path: &Path, disks: &Disks) -> (String, u64, u64) {
     // Convert root_path to absolute path
@@ -222,16 +236,9 @@ fn traverse_directory_to_xml<W: Write>(
     writer: &mut Writer<W>,
 ) -> io::Result<()> {
     // Get metadata of the current directory
-    let metadata = match fs::metadata(path) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!(
-                "[gpscan] Error: Failed to access metadata for '{}': {}",
-                path.display(),
-                e
-            );
-            return Ok(());
-        }
+    let metadata = match get_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(_) => return Ok(()),
     };
 
     // Check if the current directory is on a different filesystem
