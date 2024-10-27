@@ -31,6 +31,10 @@ cargo install gpscan
 gpscan ./foo > result.gpscan
 ```
 
+```sh
+gpscan / | gzip -c > result.gpscan.gz
+```
+
 1. Transfer the `result.gpscan` file to your Mac.
 2. Open it in [GrandPerspective](https://grandperspectiv.sourceforge.net/).
 
