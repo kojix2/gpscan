@@ -17,6 +17,12 @@ Scan your Linux filesystem and get an XML file compatible with [GrandPerspective
 
 You can download prebuilt binaries in the [GitHub Releases](https://github.com/kojix2/gpscan/releases).
 
+gpscan can also be installed with homebrew.
+
+```
+brew install kojix2/brew/gpscan
+```
+
 ### Building
 
 ```sh
