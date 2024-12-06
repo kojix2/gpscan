@@ -19,7 +19,9 @@ Scan your Linux filesystem and get an XML file compatible with [GrandPerspective
 
 You can download prebuilt binaries in the [GitHub Releases](https://github.com/kojix2/gpscan/releases).
 
-gpscan can also be installed with homebrew.
+### Homebrew
+
+[homebrew tap](https://github.com/kojix2/homebrew-brew/)
 
 ```
 brew install kojix2/brew/gpscan
@@ -35,6 +37,10 @@ cargo install gpscan
 
 ### Basic usage
 
+```
+gpscan [OPTIONS] <directory>
+```
+
 ```sh
 gpscan ./foo > result.gpscan
 ```
@@ -45,6 +51,19 @@ gpscan / | gzip -c > result.gpscan.gz
 
 1. Transfer the `result.gpscan` file to your Mac.
 2. Open it in [GrandPerspective](https://grandperspectiv.sourceforge.net/).
+
+### Options
+
+```
+  -o, --output <FILE>          Output file (default: stdout)
+  -A, --apparent-size          Use apparent size instead of disk usage [false]
+  -m, --mounts                 Cross filesystem boundaries during scan [false]
+  -z, --include-zero-files     Include zero-byte files in scan [false]
+  -e, --include-empty-folders  Include empty folders in scan [false]
+  -q, --quiet                  Suppress all informational messages [false]
+  -h, --help                   Print help
+  -V, --version                Print version
+```
 
 ## Development
 
