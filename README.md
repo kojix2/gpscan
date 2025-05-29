@@ -7,7 +7,7 @@
 [![Crates.io](https://img.shields.io/crates/l/gpscan?link=https%3A%2F%2Fgithub.com%2Fgpscan-community%2Fgpscan%2Fblob%2Fmain%2FLICENCE)](LICENSE)
 [![Lines of Code](https://img.shields.io/endpoint?url=https%3A%2F%2Ftokei.kojix2.net%2Fbadge%2Fgithub%2Fkojix2%2Fgpscan%2Flines)](https://tokei.kojix2.net/github/kojix2/gpscan)
 
-Scan your Linux filesystem and get an XML file compatible with [GrandPerspective](https://grandperspectiv.sourceforge.net/) on macOS to visualize disk usage.
+Scan your filesystem and get an XML file compatible with [GrandPerspective](https://grandperspectiv.sourceforge.net/) on macOS to visualize disk usage.
 
 - Recursively scans directories and files
 - Generates XML output compatible with GrandPerspective
@@ -65,6 +65,15 @@ gpscan / | gzip -c > result.gpscan.gz
   -h, --help                   Print help
   -V, --version                Print version
 ```
+
+### Environment Variables
+
+- `RUST_LOG`: Set logging level (e.g., `RUST_LOG=debug gpscan /path`)
+
+## Platform Notes
+
+- Windows: Physical file size calculation uses estimated 4KB cluster size
+- Linux/macOS: Uses actual filesystem block information for accurate physical sizes
 
 ## Development
 
