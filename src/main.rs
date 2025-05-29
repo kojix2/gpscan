@@ -3,7 +3,6 @@ use env_logger::Builder;
 use log::LevelFilter;
 
 // Standard library imports
-use std::io;
 use std::io::Write;
 use std::time::Instant; // For execution time measurement
 
