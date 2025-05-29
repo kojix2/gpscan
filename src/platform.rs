@@ -69,7 +69,7 @@ impl MetadataExtOps for Metadata {
             // Default cluster size is 4KB for most modern Windows systems
             let cluster_size = 4096u64;
             let file_size = self.len();
-            
+
             // Round up to the nearest cluster boundary
             if file_size == 0 {
                 0

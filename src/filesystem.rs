@@ -65,7 +65,10 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
 
     // Check if the provided path is a directory
     if !root_path.is_dir() {
-        let msg = format!("The specified path is not a directory: {}", root_path.display());
+        let msg = format!(
+            "The specified path is not a directory: {}",
+            root_path.display()
+        );
         error!("{}", msg);
         return Err(io::Error::new(io::ErrorKind::InvalidInput, msg));
     }
