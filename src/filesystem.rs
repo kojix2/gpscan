@@ -58,17 +58,16 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
 
     // Check if the provided path exists
     if !root_path.exists() {
-        error!("The specified path does not exist: {}", root_path.display());
-        std::process::exit(1); // Exit code 1 for non-existent path
+        let msg = format!("The specified path does not exist: {}", root_path.display());
+        error!("{}", msg);
+        return Err(io::Error::new(io::ErrorKind::NotFound, msg));
     }
 
     // Check if the provided path is a directory
     if !root_path.is_dir() {
-        error!(
-            "The specified path is not a directory: {}",
-            root_path.display()
-        );
-        std::process::exit(1); // Exit code 1 for invalid directory
+        let msg = format!("The specified path is not a directory: {}", root_path.display());
+        error!("{}", msg);
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, msg));
     }
 
     // Get option values

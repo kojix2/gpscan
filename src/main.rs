@@ -25,7 +25,7 @@ fn init_logger(quiet_mode: bool) {
 }
 
 /// Entry point of the program.
-fn main() -> io::Result<()> {
+fn main() {
     // Start measuring execution time
     let start_time = Instant::now();
 
@@ -46,5 +46,9 @@ fn main() -> io::Result<()> {
         start_time.elapsed()
     );
 
-    result
+    // Handle the result and set appropriate exit code
+    if let Err(e) = result {
+        eprintln!("[gpscan] [ERROR] {}", e);
+        std::process::exit(1);
+    }
 }
