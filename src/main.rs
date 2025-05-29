@@ -37,8 +37,7 @@ fn main() -> io::Result<()> {
     // Initialize logger with quiet mode support
     init_logger(quiet_mode);
 
-    // Parse arguments and run the program
-    let matches = parse_args();
+    // Run the program
     let result = run(matches);
 
     // Print execution time
