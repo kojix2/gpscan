@@ -1,7 +1,6 @@
 // External library imports
 use env_logger::Builder;
 use log::LevelFilter;
-use std::env;
 
 // Standard library imports
 use std::io;
