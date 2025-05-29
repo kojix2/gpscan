@@ -19,7 +19,7 @@ fn init_logger(quiet_mode: bool) {
         LevelFilter::Info
     };
 
-    Builder::from_env(env::var("LOG_LEVEL").unwrap_or_else(|_| "INFO".to_string()))
+    Builder::from_default_env()
         .format(|buf, record| writeln!(buf, "[gpscan] [{}] {}", record.level(), record.args()))
         .filter(None, log_level)
         .init();
