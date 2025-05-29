@@ -65,8 +65,17 @@ impl MetadataExtOps for Metadata {
         if apparent {
             self.len()
         } else {
-            // FIXME: Physical size is unavailable on Windows.
-            self.len()
+            // Calculate physical size by rounding up to cluster size
+            // Default cluster size is 4KB for most modern Windows systems
+            let cluster_size = 4096u64;
+            let file_size = self.len();
+            
+            // Round up to the nearest cluster boundary
+            if file_size == 0 {
+                0
+            } else {
+                ((file_size + cluster_size - 1) / cluster_size) * cluster_size
+            }
         }
     }
 }
