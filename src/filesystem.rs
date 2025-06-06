@@ -112,5 +112,11 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
         .write_event(Event::End(BytesEnd::new(TAG_GRANDPERSPECTIVE_SCAN_DUMP)))
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
+    // Add final newline for consistency with quick-xml Writer (always uses \n)
+    writer
+        .get_mut()
+        .write_all(b"\n")
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
     Ok(())
 }
