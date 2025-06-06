@@ -1,6 +1,6 @@
 [package]
 name = "gpscan"
-version = "0.0.9"
+version = "0.0.10"
 edition = "2021"
 authors = ["kojix2 <2xijok@gmail.com>"]
 description = "A tool to generate XML files compatible with GrandPerspective"
