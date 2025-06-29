@@ -11,9 +11,11 @@ repository = "https://github.com/kojix2/gpscan"
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive", "cargo"] }
 env_logger = "0.11"
+flate2 = "1.1"
 log = "0.4"
 quick-xml = "0.38"
 sysinfo = "0.35"
+zstd = "0.13"
 
 [dev-dependencies]
 tempdir = "0.3"
