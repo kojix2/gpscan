@@ -32,7 +32,7 @@ impl Options {
     }
 
     /// Get compression type for stdout (only explicit flags, not file extension)
-    pub fn compression_type_for_stdout(&self, matches: &ArgMatches) -> CompressionType {
+    pub fn compression_type_for_stdout(matches: &ArgMatches) -> CompressionType {
         if matches.get_flag("gzip") {
             CompressionType::Gzip
         } else if matches.get_flag("zstd") {

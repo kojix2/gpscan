@@ -70,7 +70,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
         }
         None => {
             // For stdout, use compression type from options (only explicit flags, not extension)
-            let stdout_compression = option.compression_type_for_stdout(&matches);
+            let stdout_compression = Options::compression_type_for_stdout(&matches);
             create_compressed_writer(io::stdout(), stdout_compression)?
         }
     };
