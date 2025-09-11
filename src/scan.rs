@@ -85,52 +85,32 @@ pub fn traverse_directory_to_xml<W: Write>(
         .write_event(Event::Start(folder_tag))
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-    // Iterate over directory entries
+    // GrandPerspective compliance: output File elements before Folder elements (two-pass classification)
+    let mut file_entries = Vec::new();
+    let mut dir_entries = Vec::new();
+
     for entry in entries {
         let entry_path = entry.path();
-
-        // Get metadata of the entry
         let entry_metadata = match fs::symlink_metadata(&entry_path) {
             Ok(m) => m,
-            Err(e) => {
-                error!(
-                    "Failed to access metadata for '{}': {}",
-                    entry_path.display(),
-                    e
-                );
-                continue;
-            }
+            Err(e) => { error!("Failed to access metadata for '{}': {}", entry_path.display(), e); continue; }
         };
+        let ft = entry_metadata.file_type();
+        if ft.is_symlink() { info!("Skipping symbolic link: {}", entry_path.display()); continue; }
+        if ft.is_file() { file_entries.push((entry_path, entry_metadata)); }
+        else if ft.is_dir() { dir_entries.push((entry_path, entry_metadata)); }
+        else { warn!("Unknown file type: {}", entry_path.display()); }
+    }
 
-        let file_type = entry_metadata.file_type();
-
-        if file_type.is_symlink() {
-            // Skip symbolic links
-            info!("Skipping symbolic link: {}", entry_path.display());
-            continue;
-        } else if file_type.is_dir() {
-            // Recursively traverse directories
-            traverse_directory_to_xml(
-                &entry_path,
-                false,
-                root_dev,
-                options,
-                visited_inodes,
-                writer,
-            )?;
-        } else if file_type.is_file() {
-            // Process file entries
-            process_file_entry(
-                &entry_path,
-                &entry_metadata,
-                options,
-                visited_inodes,
-                writer,
-            )?;
-        } else {
-            // Handle other file types
-            warn!("Unknown file type: {}", entry_path.display());
-        }
+    // Files first
+    for (entry_path, entry_metadata) in file_entries {
+        process_file_entry(&entry_path, &entry_metadata, options, visited_inodes, writer)?;
+    }
+    // Then directories (depth-first behavior preserved; only sibling ordering changes)
+    for (entry_path, entry_metadata) in dir_entries {
+        // entry_metadata はここでは未使用だが将来 flags 等で利用可能
+        let _ = entry_metadata; // suppress unused warning if any
+        traverse_directory_to_xml(&entry_path, false, root_dev, options, visited_inodes, writer)?;
     }
 
     // Close Folder tag
@@ -167,7 +147,7 @@ pub fn process_file_entry<W: Write>(
         .to_string_lossy()
         .to_string();
 
-    // Get physical file size
+    // Get file size (logical or physical depending on options.apparent_size)
     let size = metadata.file_size(options.apparent_size);
 
     // Skip zero-byte files if the `include_zero_files` option is not set
