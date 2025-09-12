@@ -128,7 +128,7 @@ pub fn traverse_directory_to_xml<W: Write>(
     }
     // Then directories (depth-first behavior preserved; only sibling ordering changes)
     for (entry_path, entry_metadata) in dir_entries {
-        // entry_metadata はここでは未使用だが将来 flags 等で利用可能
+    // entry_metadata is currently unused but may be used for flags in the future
         let _ = entry_metadata; // suppress unused warning if any
         traverse_directory_to_xml(
             &entry_path,
