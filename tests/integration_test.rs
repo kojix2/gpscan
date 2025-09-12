@@ -131,6 +131,52 @@ fn decompress_gzip_file(file_path: &Path) -> String {
 }
 
 #[test]
+fn test_non_tty_overwrite_requires_force() {
+    let temp_dir =
+        create_simple_test_directory("gpscan_non_tty_overwrite", "content A", "content B");
+    let dir_path = temp_dir.path();
+
+    // 1) Create initial output file so the target exists
+    let expected_output = dir_path.join("data.gpscan");
+    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    cmd.arg(dir_path.to_str().unwrap()).arg("-o").arg("data");
+    cmd.current_dir(dir_path);
+    cmd.assert().success();
+    assert!(expected_output.exists());
+
+    // 2) In non-TTY (test runner is non-TTY), without --force -> expect failure
+    let mut cmd2 = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    cmd2.arg(dir_path.to_str().unwrap()).arg("-o").arg("data");
+    cmd2.current_dir(dir_path);
+    cmd2.assert().failure().stderr(predicate::str::contains(
+        "Refusing to overwrite existing file without --force",
+    ));
+}
+
+#[test]
+fn test_non_tty_overwrite_with_force_succeeds() {
+    let temp_dir = create_simple_test_directory("gpscan_force_overwrite", "content C", "content D");
+    let dir_path = temp_dir.path();
+
+    // 1) Create the initial target file
+    let target_output = dir_path.join("target.gpscan");
+    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    cmd.arg(dir_path.to_str().unwrap()).arg("-o").arg("target");
+    cmd.current_dir(dir_path);
+    cmd.assert().success();
+    assert!(target_output.exists());
+
+    // 2) In non-TTY, with --force -> expect success
+    let mut cmd2 = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    cmd2.arg(dir_path.to_str().unwrap())
+        .arg("-o")
+        .arg("target")
+        .arg("--force");
+    cmd2.current_dir(dir_path);
+    cmd2.assert().success();
+}
+
+#[test]
 fn test_gpscan_output() {
     // Set up a temporary directory structure for testing:
     //

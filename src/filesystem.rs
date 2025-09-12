@@ -77,6 +77,30 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
                 error!("{}", msg);
                 return Err(io::Error::new(io::ErrorKind::InvalidInput, msg));
             }
+            // Overwrite confirmation when file exists
+            if path.exists() && path.is_file() && !option.force_overwrite {
+                let stdout_is_tty = atty::is(atty::Stream::Stdout);
+                let stdin_is_tty = atty::is(atty::Stream::Stdin);
+                if stdout_is_tty && stdin_is_tty {
+                    eprint!("[gpscan] [WARN] '{}' exists. Overwrite? [y/N]: ", filename);
+                    io::stderr().flush().ok();
+                    let mut buf = String::new();
+                    io::stdin().read_line(&mut buf).ok();
+                    let ans = buf.trim().to_lowercase();
+                    if ans != "y" && ans != "yes" {
+                        let msg = "Operation cancelled by user".to_string();
+                        error!("{}", msg);
+                        return Err(io::Error::new(io::ErrorKind::Other, msg));
+                    }
+                } else {
+                    let msg = format!(
+                        "Refusing to overwrite existing file without --force in non-interactive mode: {}",
+                        filename
+                    );
+                    error!("{}", msg);
+                    return Err(io::Error::new(io::ErrorKind::Other, msg));
+                }
+            }
             let file = fs::File::create(filename)?;
             create_compressed_writer_with_level(
                 file,

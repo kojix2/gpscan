@@ -88,6 +88,13 @@ pub fn parse_args() -> ArgMatches {
                 .help("Disable gzip for file output")
                 .action(clap::ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("force")
+                .short('f')
+                .long("force")
+                .help("Overwrite output file without prompt")
+                .action(clap::ArgAction::SetTrue),
+        )
         .arg_required_else_help(true)
         .get_matches()
 }

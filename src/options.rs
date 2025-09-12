@@ -9,6 +9,7 @@ pub struct Options {
     pub compression_type: CompressionType,
     pub output_filename: Option<String>,
     pub compression_level: u8, // 0-9 (gzip)
+    pub force_overwrite: bool,
 }
 
 impl Options {
@@ -17,6 +18,7 @@ impl Options {
         let no_gzip = matches.get_flag("no-gzip");
         let gzip_flag = matches.get_flag("gzip");
         let level = *matches.get_one::<u8>("compression-level").unwrap_or(&6u8);
+        let force_overwrite = matches.get_flag("force");
 
         // Determine compression type and output filename
         let (compression_type, output_filename) = match output_file {
@@ -49,6 +51,7 @@ impl Options {
             compression_type,
             output_filename,
             compression_level: level,
+            force_overwrite,
         }
     }
 
@@ -116,6 +119,7 @@ impl Options {
             compression_type: CompressionType::None,
             output_filename: None,
             compression_level: 6,
+            force_overwrite: false,
         }
     }
 }
@@ -173,6 +177,12 @@ mod tests {
                     .long("no-gzip")
                     .action(clap::ArgAction::SetTrue),
             )
+            .arg(
+                Arg::new("force")
+                    .short('f')
+                    .long("force")
+                    .action(clap::ArgAction::SetTrue),
+            )
     }
 
     #[test]
@@ -188,6 +198,7 @@ mod tests {
         assert!(!options.include_empty_folders);
         assert_eq!(options.compression_type, CompressionType::None);
         assert_eq!(options.compression_level, 6);
+        assert!(!options.force_overwrite);
     }
 
     #[test]
@@ -204,6 +215,7 @@ mod tests {
                 "--gzip",
                 "--compression-level",
                 "9",
+                "--force",
             ])
             .unwrap();
         let options = Options::from_matches(&matches);
@@ -214,6 +226,7 @@ mod tests {
         assert!(options.include_empty_folders);
         assert_eq!(options.compression_type, CompressionType::Gzip);
         assert_eq!(options.compression_level, 9);
+        assert!(options.force_overwrite);
     }
 
     #[test]
