@@ -43,7 +43,7 @@ gpscan [OPTIONS] <directory>
 ```
 
 ```sh
-gpscan . -zo result.gpscan 
+gpscan . -zo result.gpscan
 ```
 
 1. Transfer the `result.gpscan` file to your Mac.
@@ -52,16 +52,18 @@ gpscan . -zo result.gpscan
 ### Options
 
 ```
-  -o, --output <FILE>  Output file (default: stdout)
-  -A, --apparent-size  Use apparent size instead of disk usage
-  -m, --mounts         Cross filesystem boundaries during scan
-  -Z, --zero-files     Include zero-byte files in scan
-  -E, --empty-folders  Include empty folders in scan
-  -q, --quiet          Suppress all informational messages
-  -z, --gzip           Compress output using gzip
-  -s, --zstd           Compress output using zstd
-  -h, --help           Print help
-  -V, --version        Print version
+  -o, --output <FILE>            Output file (gzip by default, adds .gpscan)
+  -A, --apparent-size            Use apparent size instead of disk usage
+  -m, --mounts                   Cross filesystem boundaries during scan
+  -Z, --zero-files               Include zero-byte files in scan
+  -E, --empty-folders            Include empty folders in scan
+  -q, --quiet                    Suppress all informational messages
+  -z, --gzip                     Gzip-compress stdout (file output is gzip by default)
+      --compression-level <0-9>  Gzip level for output (default: 6)
+      --no-gzip                  Disable gzip for file output
+  -f, --force                    Overwrite output file without prompt
+  -h, --help                     Print help
+  -V, --version                  Print version
 ```
 
 ### Environment Variables
