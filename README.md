@@ -20,14 +20,6 @@ Scan your filesystem and get an XML file compatible with [GrandPerspective](http
 
 You can download prebuilt binaries in the [GitHub Releases](https://github.com/kojix2/gpscan/releases).
 
-### Homebrew
-
-[homebrew tap](https://github.com/kojix2/homebrew-brew/)
-
-```
-brew install kojix2/brew/gpscan
-```
-
 ### Building
 
 ```sh
