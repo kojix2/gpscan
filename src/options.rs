@@ -349,5 +349,23 @@ mod tests {
             Options::process_output_filename("out/result.xml"),
             "out/result.xml.gpscan"
         );
+
+        // Windows-style paths (treated robustly across platforms)
+        assert_eq!(
+            Options::process_output_filename("C\\\\dir\\\\file."),
+            "C\\\\dir\\\\file.gpscan"
+        );
+        assert_eq!(
+            Options::process_output_filename("C\\\\dir\\\\"),
+            "C\\\\dir\\\\"
+        );
+        assert_eq!(
+            Options::process_output_filename("C\\\\dir\\\\file"),
+            "C\\\\dir\\\\file.gpscan"
+        );
+        assert_eq!(
+            Options::process_output_filename("C\\\\dir\\\\file.gpscan"),
+            "C\\\\dir\\\\file.gpscan"
+        );
     }
 }
