@@ -75,6 +75,14 @@ pub fn parse_args() -> ArgMatches {
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(
+            Arg::new("compression-level")
+                .long("compression-level")
+                .value_name("0-9")
+                .help("Gzip level for output (default: 6)")
+                .value_parser(clap::value_parser!(u8).range(0..=9))
+                .num_args(1),
+        )
+        .arg(
             Arg::new("no-gzip")
                 .long("no-gzip")
                 .help("Disable gzip for file output")

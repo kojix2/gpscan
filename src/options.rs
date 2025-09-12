@@ -1,6 +1,5 @@
 use crate::compression::CompressionType;
 use clap::ArgMatches;
-use log::warn;
 
 pub struct Options {
     pub apparent_size: bool,
@@ -9,6 +8,7 @@ pub struct Options {
     pub include_empty_folders: bool,
     pub compression_type: CompressionType,
     pub output_filename: Option<String>,
+    pub compression_level: u8, // 0-9 (gzip)
 }
 
 impl Options {
@@ -16,13 +16,7 @@ impl Options {
         let output_file = matches.get_one::<String>("output");
         let no_gzip = matches.get_flag("no-gzip");
         let gzip_flag = matches.get_flag("gzip");
-
-        // Warn when -o/--output and --gzip are combined: --gzip applies to stdout only
-        if output_file.is_some() && gzip_flag {
-            warn!(
-                "--gzip is for stdout; file output is gzip by default. The --gzip flag will be ignored for -o/--output."
-            );
-        }
+        let level = *matches.get_one::<u8>("compression-level").unwrap_or(&6u8);
 
         // Determine compression type and output filename
         let (compression_type, output_filename) = match output_file {
@@ -54,6 +48,7 @@ impl Options {
             include_empty_folders: matches.get_flag("empty-folders"),
             compression_type,
             output_filename,
+            compression_level: level,
         }
     }
 
@@ -75,6 +70,7 @@ impl Options {
             include_empty_folders: false,
             compression_type: CompressionType::None,
             output_filename: None,
+            compression_level: 6,
         }
     }
 }
@@ -92,6 +88,13 @@ mod tests {
                     .short('o')
                     .long("output")
                     .value_name("FILE")
+                    .num_args(1),
+            )
+            .arg(
+                Arg::new("compression-level")
+                    .long("compression-level")
+                    .value_name("0-9")
+                    .value_parser(clap::value_parser!(u8).range(0..=9))
                     .num_args(1),
             )
             .arg(
@@ -139,6 +142,7 @@ mod tests {
         assert!(!options.include_zero_files);
         assert!(!options.include_empty_folders);
         assert_eq!(options.compression_type, CompressionType::None);
+        assert_eq!(options.compression_level, 6);
     }
 
     #[test]
@@ -153,6 +157,8 @@ mod tests {
                 "--zero-files",
                 "--empty-folders",
                 "--gzip",
+                "--compression-level",
+                "9",
             ])
             .unwrap();
         let options = Options::from_matches(&matches);
@@ -162,6 +168,7 @@ mod tests {
         assert!(options.include_zero_files);
         assert!(options.include_empty_folders);
         assert_eq!(options.compression_type, CompressionType::Gzip);
+        assert_eq!(options.compression_level, 9);
     }
 
     #[test]
@@ -173,6 +180,7 @@ mod tests {
         assert!(!options.include_zero_files);
         assert!(!options.include_empty_folders);
         assert_eq!(options.compression_type, CompressionType::None);
+        assert_eq!(options.compression_level, 6);
     }
 
     #[test]
@@ -187,6 +195,7 @@ mod tests {
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::Gzip);
         assert_eq!(options.output_filename, Some("foo.gpscan".to_string()));
+        assert_eq!(options.compression_level, 6);
     }
 
     #[test]
@@ -201,6 +210,7 @@ mod tests {
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::Gzip);
         assert_eq!(options.output_filename, Some("foo.gpscan".to_string()));
+        assert_eq!(options.compression_level, 6);
     }
 
     #[test]
@@ -215,6 +225,7 @@ mod tests {
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::Gzip);
         assert_eq!(options.output_filename, Some("foo.gz.gpscan".to_string()));
+        assert_eq!(options.compression_level, 6);
     }
 
     #[test]
@@ -229,6 +240,7 @@ mod tests {
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::None);
         assert_eq!(options.output_filename, Some("foo.gpscan".to_string()));
+        assert_eq!(options.compression_level, 6);
     }
 
     #[test]
@@ -240,6 +252,7 @@ mod tests {
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::None);
         assert_eq!(options.output_filename, None);
+        assert_eq!(options.compression_level, 6);
     }
 
     #[test]
@@ -254,6 +267,7 @@ mod tests {
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::Gzip);
         assert_eq!(options.output_filename, None);
+        assert_eq!(options.compression_level, 6);
     }
 
     #[test]

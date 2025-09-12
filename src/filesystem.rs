@@ -12,7 +12,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 
-use crate::compression::create_compressed_writer;
+use crate::compression::create_compressed_writer_with_level;
 use crate::options::Options;
 use crate::platform::MetadataExtOps;
 use crate::scan::traverse_directory_to_xml;
@@ -63,9 +63,17 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     let handle: Box<dyn Write> = match &option.output_filename {
         Some(filename) => {
             let file = fs::File::create(filename)?;
-            create_compressed_writer(file, option.compression_type)?
+            create_compressed_writer_with_level(
+                file,
+                option.compression_type,
+                option.compression_level,
+            )?
         }
-        None => create_compressed_writer(io::stdout(), option.compression_type)?,
+        None => create_compressed_writer_with_level(
+            io::stdout(),
+            option.compression_type,
+            option.compression_level,
+        )?,
     };
 
     let mut writer = Writer::new_with_indent(handle, b' ', 0);
