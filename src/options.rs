@@ -352,18 +352,29 @@ mod tests {
         );
 
         // Windows-style paths (treated robustly across platforms)
+        // On Windows, backslash is a separator and Path::join will normalize it.
+        // On non-Windows, backslash is a normal char, so the string stays as-is.
+        let input_win_style_with_dot = "C\\\\dir\\\\file.";
+        let expected_win_style_with_dot = if cfg!(windows) {
+            std::path::Path::new("C\\dir").join("file.gpscan").to_string_lossy().into_owned()
+        } else {
+            "C\\\\dir\\\\file.gpscan".to_string()
+        };
         assert_eq!(
-            Options::process_output_filename("C\\\\dir\\\\file."),
-            "C\\\\dir\\\\file.gpscan"
+            Options::process_output_filename(input_win_style_with_dot),
+            expected_win_style_with_dot
         );
         assert_eq!(
             Options::process_output_filename("C\\\\dir\\\\"),
             "C\\\\dir\\\\"
         );
-        assert_eq!(
-            Options::process_output_filename("C\\\\dir\\\\file"),
-            "C\\\\dir\\\\file.gpscan"
-        );
+        let input_win_style = "C\\\\dir\\\\file";
+        let expected_win_style = if cfg!(windows) {
+            std::path::Path::new("C\\dir").join("file.gpscan").to_string_lossy().into_owned()
+        } else {
+            "C\\\\dir\\\\file.gpscan".to_string()
+        };
+        assert_eq!(Options::process_output_filename(input_win_style), expected_win_style);
         assert_eq!(
             Options::process_output_filename("C\\\\dir\\\\file.gpscan"),
             "C\\\\dir\\\\file.gpscan"
