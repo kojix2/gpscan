@@ -14,8 +14,6 @@ impl Options {
         // Determine compression type from flags or output filename
         let compression_type = if matches.get_flag("gzip") {
             CompressionType::Gzip
-        } else if matches.get_flag("zstd") {
-            CompressionType::Zstd
         } else if let Some(output_file) = matches.get_one::<String>("output") {
             CompressionType::from_extension(output_file)
         } else {
@@ -35,8 +33,6 @@ impl Options {
     pub fn compression_type_for_stdout(matches: &ArgMatches) -> CompressionType {
         if matches.get_flag("gzip") {
             CompressionType::Gzip
-        } else if matches.get_flag("zstd") {
-            CompressionType::Zstd
         } else {
             CompressionType::None
         }
@@ -93,15 +89,7 @@ mod tests {
                 Arg::new("gzip")
                     .short('z')
                     .long("gzip")
-                    .action(clap::ArgAction::SetTrue)
-                    .conflicts_with("zstd"),
-            )
-            .arg(
-                Arg::new("zstd")
-                    .short('s')
-                    .long("zstd")
-                    .action(clap::ArgAction::SetTrue)
-                    .conflicts_with("gzip"),
+                    .action(clap::ArgAction::SetTrue),
             )
     }
 
@@ -165,19 +153,11 @@ mod tests {
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::Gzip);
 
-        // Test zstd extension detection
+        // Test no compression for unknown extension
         let matches = app
-            .clone()
-            .try_get_matches_from(vec!["test", "--output", "file.zst"])
+            .try_get_matches_from(vec!["test", "--output", "file.txt"])
             .unwrap();
         let options = Options::from_matches(&matches);
-        assert_eq!(options.compression_type, CompressionType::Zstd);
-
-        // Test explicit flag overrides extension
-        let matches = app
-            .try_get_matches_from(vec!["test", "--output", "file.txt", "--zstd"])
-            .unwrap();
-        let options = Options::from_matches(&matches);
-        assert_eq!(options.compression_type, CompressionType::Zstd);
+        assert_eq!(options.compression_type, CompressionType::None);
     }
 }

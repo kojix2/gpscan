@@ -90,7 +90,11 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     scan_info.push_attribute(("volumeSize", volume_size.to_string().as_str()));
     scan_info.push_attribute(("freeSpace", free_space.to_string().as_str()));
     scan_info.push_attribute(("scanTime", scan_time.to_string().as_str()));
-    let measure = if option.apparent_size { "logical" } else { "physical" };
+    let measure = if option.apparent_size {
+        "logical"
+    } else {
+        "physical"
+    };
     scan_info.push_attribute(("fileSizeMeasure", measure));
     writer
         .write_event(Event::Start(scan_info))

@@ -72,16 +72,7 @@ pub fn parse_args() -> ArgMatches {
                 .short('z')
                 .long("gzip")
                 .help("Compress output using gzip")
-                .action(clap::ArgAction::SetTrue)
-                .conflicts_with("zstd"),
-        )
-        .arg(
-            Arg::new("zstd")
-                .short('s')
-                .long("zstd")
-                .help("Compress output using zstd")
-                .action(clap::ArgAction::SetTrue)
-                .conflicts_with("gzip"),
+                .action(clap::ArgAction::SetTrue),
         )
         .arg_required_else_help(true)
         .get_matches()

@@ -93,24 +93,51 @@ pub fn traverse_directory_to_xml<W: Write>(
         let entry_path = entry.path();
         let entry_metadata = match fs::symlink_metadata(&entry_path) {
             Ok(m) => m,
-            Err(e) => { error!("Failed to access metadata for '{}': {}", entry_path.display(), e); continue; }
+            Err(e) => {
+                error!(
+                    "Failed to access metadata for '{}': {}",
+                    entry_path.display(),
+                    e
+                );
+                continue;
+            }
         };
         let ft = entry_metadata.file_type();
-        if ft.is_symlink() { info!("Skipping symbolic link: {}", entry_path.display()); continue; }
-        if ft.is_file() { file_entries.push((entry_path, entry_metadata)); }
-        else if ft.is_dir() { dir_entries.push((entry_path, entry_metadata)); }
-        else { warn!("Unknown file type: {}", entry_path.display()); }
+        if ft.is_symlink() {
+            info!("Skipping symbolic link: {}", entry_path.display());
+            continue;
+        }
+        if ft.is_file() {
+            file_entries.push((entry_path, entry_metadata));
+        } else if ft.is_dir() {
+            dir_entries.push((entry_path, entry_metadata));
+        } else {
+            warn!("Unknown file type: {}", entry_path.display());
+        }
     }
 
     // Files first
     for (entry_path, entry_metadata) in file_entries {
-        process_file_entry(&entry_path, &entry_metadata, options, visited_inodes, writer)?;
+        process_file_entry(
+            &entry_path,
+            &entry_metadata,
+            options,
+            visited_inodes,
+            writer,
+        )?;
     }
     // Then directories (depth-first behavior preserved; only sibling ordering changes)
     for (entry_path, entry_metadata) in dir_entries {
         // entry_metadata はここでは未使用だが将来 flags 等で利用可能
         let _ = entry_metadata; // suppress unused warning if any
-        traverse_directory_to_xml(&entry_path, false, root_dev, options, visited_inodes, writer)?;
+        traverse_directory_to_xml(
+            &entry_path,
+            false,
+            root_dev,
+            options,
+            visited_inodes,
+            writer,
+        )?;
     }
 
     // Close Folder tag

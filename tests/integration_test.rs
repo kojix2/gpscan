@@ -167,7 +167,10 @@ fn test_gpscan_output() {
 
     // Test XML structure
     assert_xml_structure(&xml_output);
-    assert!(xml_output.contains("fileSizeMeasure=\"physical\""), "Expected physical measure by default");
+    assert!(
+        xml_output.contains("fileSizeMeasure=\"physical\""),
+        "Expected physical measure by default"
+    );
 
     // Test --zero-files option
     let xml_output_zero = run_gpscan(dir_path, &["--zero-files"]);
@@ -181,7 +184,10 @@ fn test_gpscan_output() {
 
     // Test apparent size (logical)
     let xml_output_logical = run_gpscan(dir_path, &["--apparent-size"]);
-    assert!(xml_output_logical.contains("fileSizeMeasure=\"logical\""), "Expected logical measure when --apparent-size is set");
+    assert!(
+        xml_output_logical.contains("fileSizeMeasure=\"logical\""),
+        "Expected logical measure when --apparent-size is set"
+    );
 }
 
 #[test]
