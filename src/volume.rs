@@ -75,7 +75,7 @@ mod tests {
     fn test_windows_path_canonicalization() {
         // Test that Windows UNC prefix is properly removed
         let test_path = PathBuf::from(r"\\?\C:\test");
-        let expected = "C:\\test";
+        let _expected = "C:\\test";
 
         // This is testing the logic inside get_volume_info
         // We can't directly test the internal logic, but we can test the behavior

@@ -344,10 +344,11 @@ mod tests {
         assert_eq!(Options::process_output_filename("./"), "./");
         assert_eq!(Options::process_output_filename("."), ".");
         assert_eq!(Options::process_output_filename(".."), "..");
-        // nested path: only filename is modified
+        // nested path: only filename is modified (platform-specific separator)
+        let expected_nested = std::path::Path::new("out").join("result.xml.gpscan");
         assert_eq!(
             Options::process_output_filename("out/result.xml"),
-            "out/result.xml.gpscan"
+            expected_nested.to_string_lossy()
         );
 
         // Windows-style paths (treated robustly across platforms)
