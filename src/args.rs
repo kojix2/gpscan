@@ -74,6 +74,12 @@ pub fn parse_args() -> ArgMatches {
                 .help("Compress output using gzip")
                 .action(clap::ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("no-gzip")
+                .long("no-gzip")
+                .help("Disable gzip compression for file output")
+                .action(clap::ArgAction::SetTrue),
+        )
         .arg_required_else_help(true)
         .get_matches()
 }

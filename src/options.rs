@@ -7,17 +7,36 @@ pub struct Options {
     pub include_zero_files: bool,
     pub include_empty_folders: bool,
     pub compression_type: CompressionType,
+    pub output_filename: Option<String>,
 }
 
 impl Options {
     pub fn from_matches(matches: &ArgMatches) -> Self {
-        // Determine compression type from flags or output filename
-        let compression_type = if matches.get_flag("gzip") {
-            CompressionType::Gzip
-        } else if let Some(output_file) = matches.get_one::<String>("output") {
-            CompressionType::from_extension(output_file)
-        } else {
-            CompressionType::None
+        let output_file = matches.get_one::<String>("output");
+        let no_gzip = matches.get_flag("no-gzip");
+        let gzip_flag = matches.get_flag("gzip");
+
+        // Determine compression type and output filename
+        let (compression_type, output_filename) = match output_file {
+            Some(filename) => {
+                // File output: default to gzip unless --no-gzip is specified
+                let compression = if no_gzip {
+                    CompressionType::None
+                } else {
+                    CompressionType::Gzip
+                };
+                let final_filename = Self::process_output_filename(filename);
+                (compression, Some(final_filename))
+            }
+            None => {
+                // Stdout: default to no compression unless --gzip is specified
+                let compression = if gzip_flag {
+                    CompressionType::Gzip
+                } else {
+                    CompressionType::None
+                };
+                (compression, None)
+            }
         };
 
         Options {
@@ -26,6 +45,16 @@ impl Options {
             include_zero_files: matches.get_flag("zero-files"),
             include_empty_folders: matches.get_flag("empty-folders"),
             compression_type,
+            output_filename,
+        }
+    }
+
+    /// Process output filename to add .gpscan extension if needed
+    fn process_output_filename(filename: &str) -> String {
+        if filename.ends_with(".gpscan") {
+            filename.to_string()
+        } else {
+            format!("{}.gpscan", filename)
         }
     }
 
@@ -46,6 +75,7 @@ impl Options {
             include_zero_files: false,
             include_empty_folders: false,
             compression_type: CompressionType::None,
+            output_filename: None,
         }
     }
 }
@@ -89,6 +119,11 @@ mod tests {
                 Arg::new("gzip")
                     .short('z')
                     .long("gzip")
+                    .action(clap::ArgAction::SetTrue),
+            )
+            .arg(
+                Arg::new("no-gzip")
+                    .long("no-gzip")
                     .action(clap::ArgAction::SetTrue),
             )
     }
@@ -142,22 +177,94 @@ mod tests {
     }
 
     #[test]
-    fn test_options_compression_from_extension() {
+    fn test_file_output_default_gzip() {
         let app = create_test_command();
 
-        // Test gzip extension detection
+        // Test file output defaults to gzip compression
         let matches = app
             .clone()
-            .try_get_matches_from(vec!["test", "--output", "file.gz"])
+            .try_get_matches_from(vec!["test", "--output", "foo"])
             .unwrap();
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::Gzip);
+        assert_eq!(options.output_filename, Some("foo.gpscan".to_string()));
+    }
 
-        // Test no compression for unknown extension
+    #[test]
+    fn test_file_output_with_gpscan_extension() {
+        let app = create_test_command();
+
+        // Test file output with .gpscan extension doesn't add another extension
         let matches = app
-            .try_get_matches_from(vec!["test", "--output", "file.txt"])
+            .clone()
+            .try_get_matches_from(vec!["test", "--output", "foo.gpscan"])
+            .unwrap();
+        let options = Options::from_matches(&matches);
+        assert_eq!(options.compression_type, CompressionType::Gzip);
+        assert_eq!(options.output_filename, Some("foo.gpscan".to_string()));
+    }
+
+    #[test]
+    fn test_file_output_with_gz_extension() {
+        let app = create_test_command();
+
+        // Test file output with .gz extension gets .gpscan added
+        let matches = app
+            .clone()
+            .try_get_matches_from(vec!["test", "--output", "foo.gz"])
+            .unwrap();
+        let options = Options::from_matches(&matches);
+        assert_eq!(options.compression_type, CompressionType::Gzip);
+        assert_eq!(options.output_filename, Some("foo.gz.gpscan".to_string()));
+    }
+
+    #[test]
+    fn test_file_output_no_gzip() {
+        let app = create_test_command();
+
+        // Test --no-gzip disables compression for file output
+        let matches = app
+            .clone()
+            .try_get_matches_from(vec!["test", "--output", "foo", "--no-gzip"])
             .unwrap();
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::None);
+        assert_eq!(options.output_filename, Some("foo.gpscan".to_string()));
+    }
+
+    #[test]
+    fn test_stdout_default_no_compression() {
+        let app = create_test_command();
+
+        // Test stdout defaults to no compression
+        let matches = app.clone().try_get_matches_from(vec!["test"]).unwrap();
+        let options = Options::from_matches(&matches);
+        assert_eq!(options.compression_type, CompressionType::None);
+        assert_eq!(options.output_filename, None);
+    }
+
+    #[test]
+    fn test_stdout_with_gzip() {
+        let app = create_test_command();
+
+        // Test --gzip enables compression for stdout
+        let matches = app
+            .clone()
+            .try_get_matches_from(vec!["test", "--gzip"])
+            .unwrap();
+        let options = Options::from_matches(&matches);
+        assert_eq!(options.compression_type, CompressionType::Gzip);
+        assert_eq!(options.output_filename, None);
+    }
+
+    #[test]
+    fn test_process_output_filename() {
+        assert_eq!(Options::process_output_filename("foo"), "foo.gpscan");
+        assert_eq!(Options::process_output_filename("foo.gpscan"), "foo.gpscan");
+        assert_eq!(Options::process_output_filename("foo.gz"), "foo.gz.gpscan");
+        assert_eq!(
+            Options::process_output_filename("foo.xml"),
+            "foo.xml.gpscan"
+        );
     }
 }

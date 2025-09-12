@@ -195,20 +195,27 @@ fn test_gpscan_with_output_file() {
     let temp_dir = create_simple_test_directory("gpscan_test_output", "Content for file1", "");
     let dir_path = temp_dir.path();
 
-    // Specify an output file
-    let output_file_path = dir_path.join("output.xml");
+    // Specify an output file - should automatically get .gpscan extension and be gzip compressed
+    let expected_output_file_path = dir_path.join("output.xml.gpscan");
 
     // Run `gpscan` with an output file specified
     let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
     cmd.arg(dir_path.to_str().unwrap())
         .arg("-o")
-        .arg(output_file_path.to_str().unwrap());
+        .arg("output.xml");
+    cmd.current_dir(dir_path);
     cmd.assert().success();
 
-    // Read and verify the output from the specified file
-    let output_xml = fs::read_to_string(output_file_path).expect("Failed to read output file");
-    assert_file_in_xml(&output_xml, "file1.txt", true);
-    assert_xml_structure(&output_xml);
+    // The file should be gzip compressed with .gpscan extension
+    assert!(
+        expected_output_file_path.exists(),
+        "Expected output file with .gpscan extension was not created"
+    );
+
+    // Decompress and verify the output
+    let decompressed_content = decompress_gzip_file(&expected_output_file_path);
+    assert_file_in_xml(&decompressed_content, "file1.txt", true);
+    assert_xml_structure(&decompressed_content);
 }
 
 #[test]
@@ -245,21 +252,22 @@ fn test_gpscan_with_gzip_compression() {
     );
     let dir_path = temp_dir.path();
 
-    // Test gzip compression with long flag
-    let output_file_path = dir_path.join("output.xml.gz");
+    // Test file output - should be gzip compressed by default with .gpscan extension
+    // Input: "output.xml.gz" -> Output: "output.xml.gz.gpscan" (gzip compressed)
+    let expected_output_file_path = dir_path.join("output.xml.gz.gpscan");
     let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
     cmd.arg(dir_path.to_str().unwrap())
         .arg("-o")
-        .arg(output_file_path.to_str().unwrap())
-        .arg("--gzip");
+        .arg("output.xml.gz");
+    cmd.current_dir(dir_path);
     cmd.assert().success();
 
     // Verify the compressed file exists and decompress it
     assert!(
-        output_file_path.exists(),
+        expected_output_file_path.exists(),
         "Gzip compressed output file was not created"
     );
-    let decompressed_content = decompress_gzip_file(&output_file_path);
+    let decompressed_content = decompress_gzip_file(&expected_output_file_path);
 
     // Verify the decompressed XML content
     assert_file_in_xml(&decompressed_content, "file1.txt", true);
@@ -267,34 +275,36 @@ fn test_gpscan_with_gzip_compression() {
     assert_file_in_xml(&decompressed_content, "file2.txt", true);
     assert_xml_structure(&decompressed_content);
 
-    // Test gzip compression with short flag using a separate directory
+    // Test --no-gzip flag - should create uncompressed .gpscan file
     let temp_dir2 = create_simple_test_directory(
-        "gpscan_gzip_test2",
-        "Content for gzip compression test",
-        "Another file for gzip test",
+        "gpscan_no_gzip_test",
+        "Content for no gzip test",
+        "Another file for no gzip test",
     );
     let dir_path2 = temp_dir2.path();
 
-    let output_file_path2 = dir_path2.join("output2.xml.gz");
+    let expected_output_file_path2 = dir_path2.join("output2.gpscan");
     let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
     cmd.arg(dir_path2.to_str().unwrap())
         .arg("-o")
-        .arg(output_file_path2.to_str().unwrap())
-        .arg("-z");
+        .arg("output2")
+        .arg("--no-gzip");
+    cmd.current_dir(dir_path2);
     cmd.assert().success();
 
-    // Verify the second compressed file exists and is valid
+    // Verify the uncompressed file exists and read it directly
     assert!(
-        output_file_path2.exists(),
-        "Second gzip compressed output file was not created"
+        expected_output_file_path2.exists(),
+        "Uncompressed output file was not created"
     );
-    let decompressed_content2 = decompress_gzip_file(&output_file_path2);
+    let content =
+        fs::read_to_string(&expected_output_file_path2).expect("Failed to read uncompressed file");
 
-    // Verify both outputs contain the same file structure
-    assert_file_in_xml(&decompressed_content2, "file1.txt", true);
-    assert_folder_in_xml(&decompressed_content2, "subdir", true);
-    assert_file_in_xml(&decompressed_content2, "file2.txt", true);
-    assert_xml_structure(&decompressed_content2);
+    // Verify the XML content
+    assert_file_in_xml(&content, "file1.txt", true);
+    assert_folder_in_xml(&content, "subdir", true);
+    assert_file_in_xml(&content, "file2.txt", true);
+    assert_xml_structure(&content);
 }
 
 #[test]
@@ -306,22 +316,54 @@ fn test_gpscan_with_auto_gzip_detection() {
     );
     let dir_path = temp_dir.path();
 
-    // Test automatic gzip compression based on .gz extension
-    let output_file_path = dir_path.join("auto_output.xml.gz");
+    // Test file output with .gpscan extension - should be gzip compressed by default
+    let expected_output_file_path = dir_path.join("auto_output.gpscan");
     let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
     cmd.arg(dir_path.to_str().unwrap())
         .arg("-o")
-        .arg(output_file_path.to_str().unwrap());
+        .arg("auto_output.gpscan");
+    cmd.current_dir(dir_path);
     cmd.assert().success();
 
     // Verify the compressed file exists and decompress it
     assert!(
-        output_file_path.exists(),
+        expected_output_file_path.exists(),
         "Auto-detected gzip compressed output file was not created"
     );
-    let decompressed_content = decompress_gzip_file(&output_file_path);
+    let decompressed_content = decompress_gzip_file(&expected_output_file_path);
 
     // Verify the decompressed XML content
     assert_file_in_xml(&decompressed_content, "file1.txt", true);
     assert_xml_structure(&decompressed_content);
+}
+
+#[test]
+fn test_gpscan_stdout_compression() {
+    let temp_dir =
+        create_simple_test_directory("gpscan_stdout_test", "Content for stdout test", "");
+    let dir_path = temp_dir.path();
+
+    // Test stdout without --gzip flag - should output plain text
+    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    cmd.arg(dir_path.to_str().unwrap());
+    let output = cmd.output().expect("Failed to execute gpscan");
+    let stdout_content = String::from_utf8_lossy(&output.stdout);
+
+    // Should be plain XML
+    assert_xml_structure(&stdout_content);
+    assert_file_in_xml(&stdout_content, "file1.txt", true);
+
+    // Test stdout with --gzip flag - should output compressed data
+    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    cmd.arg(dir_path.to_str().unwrap()).arg("--gzip");
+    let output = cmd.output().expect("Failed to execute gpscan");
+
+    // The output should be gzip compressed (binary data)
+    // We can verify this by checking that it's not valid UTF-8 plain text XML
+    let stdout_bytes = &output.stdout;
+    assert!(stdout_bytes.len() > 0, "No output received");
+
+    // Gzip files start with magic bytes 0x1f, 0x8b
+    assert_eq!(stdout_bytes[0], 0x1f, "First byte should be 0x1f for gzip");
+    assert_eq!(stdout_bytes[1], 0x8b, "Second byte should be 0x8b for gzip");
 }

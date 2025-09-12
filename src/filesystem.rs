@@ -59,20 +59,13 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     // Get volume information
     let (volume_path, volume_size, free_space) = get_volume_info(root_path, &disks);
 
-    // Determine output destination
-    let output = matches.get_one::<String>("output");
-
     // Create a write handle with compression support
-    let handle: Box<dyn Write> = match output {
-        Some(file) => {
-            let file = fs::File::create(file)?;
+    let handle: Box<dyn Write> = match &option.output_filename {
+        Some(filename) => {
+            let file = fs::File::create(filename)?;
             create_compressed_writer(file, option.compression_type)?
         }
-        None => {
-            // For stdout, use compression type from options (only explicit flags, not extension)
-            let stdout_compression = Options::compression_type_for_stdout(&matches);
-            create_compressed_writer(io::stdout(), stdout_compression)?
-        }
+        None => create_compressed_writer(io::stdout(), option.compression_type)?,
     };
 
     let mut writer = Writer::new_with_indent(handle, b' ', 0);
