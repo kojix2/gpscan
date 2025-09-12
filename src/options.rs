@@ -58,15 +58,6 @@ impl Options {
         }
     }
 
-    /// Get compression type for stdout (only explicit flags, not file extension)
-    pub fn compression_type_for_stdout(matches: &ArgMatches) -> CompressionType {
-        if matches.get_flag("gzip") {
-            CompressionType::Gzip
-        } else {
-            CompressionType::None
-        }
-    }
-
     /// Create Options with default values for testing
     pub fn default() -> Self {
         Options {

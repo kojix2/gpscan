@@ -9,21 +9,7 @@ pub enum CompressionType {
     Gzip,
 }
 
-impl CompressionType {
-    /// Determine compression type from file extension
-    pub fn from_extension(filename: &str) -> Self {
-        // Check extensions in order of preference
-        const EXTENSIONS: &[(&str, CompressionType)] = &[(".gz", CompressionType::Gzip)];
-
-        for (ext, compression_type) in EXTENSIONS {
-            if filename.ends_with(ext) {
-                return *compression_type;
-            }
-        }
-
-        CompressionType::None
-    }
-}
+impl CompressionType {}
 
 /// Factory function to create compressed writers
 pub fn create_compressed_writer<W: Write + 'static>(
@@ -43,22 +29,6 @@ pub fn create_compressed_writer<W: Write + 'static>(
 mod tests {
     use super::*;
     use std::io::Cursor;
-
-    #[test]
-    fn test_compression_type_from_extension() {
-        assert_eq!(
-            CompressionType::from_extension("file.txt"),
-            CompressionType::None
-        );
-        assert_eq!(
-            CompressionType::from_extension("file.gz"),
-            CompressionType::Gzip
-        );
-        assert_eq!(
-            CompressionType::from_extension("file.xml.gz"),
-            CompressionType::Gzip
-        );
-    }
 
     #[test]
     fn test_create_compressed_writer_none() {
