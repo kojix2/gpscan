@@ -1,5 +1,6 @@
 use crate::compression::CompressionType;
 use clap::ArgMatches;
+use log::warn;
 
 pub struct Options {
     pub apparent_size: bool,
@@ -15,6 +16,13 @@ impl Options {
         let output_file = matches.get_one::<String>("output");
         let no_gzip = matches.get_flag("no-gzip");
         let gzip_flag = matches.get_flag("gzip");
+
+        // Warn when -o/--output and --gzip are combined: --gzip applies to stdout only
+        if output_file.is_some() && gzip_flag {
+            warn!(
+                "--gzip is for stdout; file output is gzip by default. The --gzip flag will be ignored for -o/--output."
+            );
+        }
 
         // Determine compression type and output filename
         let (compression_type, output_filename) = match output_file {
