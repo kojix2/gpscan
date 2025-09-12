@@ -52,13 +52,58 @@ impl Options {
         }
     }
 
-    /// Process output filename to add .gpscan extension if needed
+    /// Process output filename to add .gpscan extension if needed.
+    /// - Works on the file name component only
+    /// - Keeps directory part intact
+    /// - If path looks like a directory (no file name), returns unchanged (validation happens later)
+    /// - Trims trailing dots in file name (e.g., "foo." -> "foo.gpscan")
     fn process_output_filename(filename: &str) -> String {
-        if filename.ends_with(".gpscan") {
-            filename.to_string()
-        } else {
-            format!("{}.gpscan", filename)
+        use std::path::{Path, PathBuf};
+        // If the raw string ends with a path separator, treat it as directory-like and return unchanged
+        // Handle both separators for cross-platform robustness
+        if filename.ends_with('/') || filename.ends_with('\\') {
+            return filename.to_string();
         }
+
+        let path = Path::new(filename);
+
+        // If there's no file name component (e.g., root), return as-is
+        let Some(os_fname) = path.file_name() else {
+            return filename.to_string();
+        };
+
+        let fname = os_fname.to_string_lossy();
+
+        // If already ends with .gpscan, return as-is
+        if fname.ends_with(".gpscan") {
+            return filename.to_string();
+        }
+
+        // If the filename is "." or "..", do not transform (likely a directory)
+        if fname == "." || fname == ".." {
+            return filename.to_string();
+        }
+
+        // Trim trailing dots to avoid "foo..gpscan"
+        let mut trimmed = fname.to_string();
+        while trimmed.ends_with('.') {
+            trimmed.pop();
+        }
+
+        // If trimming removed everything (unlikely), keep original
+        if trimmed.is_empty() {
+            return filename.to_string();
+        }
+
+        let new_fname = format!("{}.gpscan", trimmed);
+
+        // Rebuild path with the same parent
+        let new_path: PathBuf = match path.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => parent.join(new_fname),
+            _ => PathBuf::from(new_fname),
+        };
+
+        new_path.to_string_lossy().into_owned()
     }
 
     /// Create Options with default values for testing
@@ -278,6 +323,18 @@ mod tests {
         assert_eq!(
             Options::process_output_filename("foo.xml"),
             "foo.xml.gpscan"
+        );
+        // trailing dot should not double-dot
+        assert_eq!(Options::process_output_filename("foo."), "foo.gpscan");
+        // keep directory-like paths unchanged here; validation happens later
+        assert_eq!(Options::process_output_filename("dir/"), "dir/");
+        assert_eq!(Options::process_output_filename("./"), "./");
+        assert_eq!(Options::process_output_filename("."), ".");
+        assert_eq!(Options::process_output_filename(".."), "..");
+        // nested path: only filename is modified
+        assert_eq!(
+            Options::process_output_filename("out/result.xml"),
+            "out/result.xml.gpscan"
         );
     }
 }

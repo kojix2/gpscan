@@ -62,6 +62,21 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     // Create a write handle with compression support
     let handle: Box<dyn Write> = match &option.output_filename {
         Some(filename) => {
+            // Validate that the provided output is not a directory-like path
+            // Note: We only check obvious cases (ends_with separator or path exists and is dir)
+            let path = Path::new(filename);
+            if path.as_os_str().is_empty()
+                || path.to_string_lossy().ends_with(std::path::MAIN_SEPARATOR)
+            {
+                let msg = format!("Output path looks like a directory: {}", filename);
+                error!("{}", msg);
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, msg));
+            }
+            if path.exists() && path.is_dir() {
+                let msg = format!("Output path is a directory: {}", filename);
+                error!("{}", msg);
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, msg));
+            }
             let file = fs::File::create(filename)?;
             create_compressed_writer_with_level(
                 file,
