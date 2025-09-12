@@ -34,12 +34,25 @@ cargo install gpscan
 gpscan [OPTIONS] <directory>
 ```
 
+Typical commands:
+
 ```sh
-gpscan . -zo result.gpscan
+# File output (gzip by default, .gpscan is auto-appended)
+gpscan . -o result
+
+# Plain text file output (no gzip)
+gpscan . -o result --no-gzip
+
+# Gzip to stdout (useful for piping/redirect)
+gpscan . -z > result.gpscan
 ```
 
-1. Transfer the `result.gpscan` file to your Mac.
-2. Open it in [GrandPerspective](https://grandperspectiv.sourceforge.net/).
+Then open the generated file in [GrandPerspective](https://grandperspectiv.sourceforge.net/).
+
+Notes:
+
+- File output (-o) defaults to gzip and adds the .gpscan suffix automatically.
+- When the target file already exists: in TTY, a prompt asks to overwrite; in non-interactive mode, use `--force`.
 
 ### Options
 
