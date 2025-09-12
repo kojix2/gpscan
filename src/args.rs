@@ -29,7 +29,7 @@ pub fn parse_args() -> ArgMatches {
                 .short('o')
                 .long("output")
                 .value_name("FILE")
-                .help("Output file (default: stdout)")
+                .help("Output file (gzip by default, adds .gpscan)")
                 .num_args(1),
         )
         .arg(
@@ -71,13 +71,13 @@ pub fn parse_args() -> ArgMatches {
             Arg::new("gzip")
                 .short('z')
                 .long("gzip")
-                .help("Compress output using gzip")
+                .help("Gzip-compress stdout (file output is gzip by default)")
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(
             Arg::new("no-gzip")
                 .long("no-gzip")
-                .help("Disable gzip compression for file output")
+                .help("Disable gzip for file output")
                 .action(clap::ArgAction::SetTrue),
         )
         .arg_required_else_help(true)
