@@ -43,11 +43,7 @@ gpscan [OPTIONS] <directory>
 ```
 
 ```sh
-gpscan ./foo > result.gpscan
-```
-
-```sh
-gpscan --gzip > result.gpscan.gz
+gpscan . -zo result.gpscan 
 ```
 
 1. Transfer the `result.gpscan` file to your Mac.
