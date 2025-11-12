@@ -8,7 +8,7 @@ pub fn parse_args() -> ArgMatches {
 
     Command::new("gpscan")
         .version(clap::crate_version!())
-        .about(&format!(
+        .about(format!(
             "\n\n{}Program:{} {}gpscan{} (GrandPerspective XML Scan Dump)\n\
             Version: {}\n\
             Source:  https://github.com/kojix2/gpscan",

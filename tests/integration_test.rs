@@ -72,7 +72,7 @@ fn create_simple_test_directory(name: &str, content1: &str, content2: &str) -> T
 
 /// Helper function to run gpscan command with arguments
 fn run_gpscan(dir_path: &Path, args: &[&str]) -> String {
-    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
     cmd.arg(dir_path.to_str().unwrap());
     for arg in args {
         cmd.arg(arg);
@@ -407,7 +407,7 @@ fn test_gpscan_stdout_compression() {
     // The output should be gzip compressed (binary data)
     // We can verify this by checking that it's not valid UTF-8 plain text XML
     let stdout_bytes = &output.stdout;
-    assert!(stdout_bytes.len() > 0, "No output received");
+    assert!(!stdout_bytes.is_empty(), "No output received");
 
     // Gzip files start with magic bytes 0x1f, 0x8b
     assert_eq!(stdout_bytes[0], 0x1f, "First byte should be 0x1f for gzip");

@@ -26,13 +26,13 @@ pub fn output_xml_header<W: Write>(writer: &mut Writer<W>) -> io::Result<()> {
             Some(XML_ENCODING),
             None,
         )))
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
     let mut root = BytesStart::new(TAG_GRANDPERSPECTIVE_SCAN_DUMP);
     root.push_attribute(("appVersion", GRANDPERSPECTIVE_APP_VERSION));
     root.push_attribute(("formatVersion", GRANDPERSPECTIVE_FORMAT_VERSION));
     writer
         .write_event(Event::Start(root))
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
     Ok(())
 }
 
@@ -69,7 +69,7 @@ mod tests {
 
     #[test]
     fn test_format_system_time_error() {
-        let result = format_system_time(Err(io::Error::new(io::ErrorKind::Other, "test error")));
+        let result = format_system_time(Err(io::Error::other("test error")));
         assert_eq!(result, DEFAULT_DATETIME);
     }
 

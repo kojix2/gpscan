@@ -51,7 +51,7 @@ pub fn traverse_directory_to_xml<W: Write>(
         path.display().to_string()
     } else {
         path.file_name()
-            .unwrap_or_else(|| path.as_os_str())
+            .unwrap_or(path.as_os_str())
             .to_string_lossy()
             .to_string()
     };
@@ -83,7 +83,7 @@ pub fn traverse_directory_to_xml<W: Write>(
     folder_tag.push_attribute(("accessed", accessed.as_str()));
     writer
         .write_event(Event::Start(folder_tag))
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
 
     // GrandPerspective compliance: output File elements before Folder elements (two-pass classification)
     let mut file_entries = Vec::new();
@@ -143,7 +143,7 @@ pub fn traverse_directory_to_xml<W: Write>(
     // Close Folder tag
     writer
         .write_event(Event::End(BytesEnd::new(TAG_FOLDER)))
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
     Ok(())
 }
 
@@ -170,7 +170,7 @@ pub fn process_file_entry<W: Write>(
     // Get file name
     let name = path
         .file_name()
-        .unwrap_or_else(|| path.as_os_str())
+        .unwrap_or(path.as_os_str())
         .to_string_lossy()
         .to_string();
 
@@ -195,7 +195,7 @@ pub fn process_file_entry<W: Write>(
     file_tag.push_attribute(("accessed", accessed.as_str()));
     writer
         .write_event(Event::Empty(file_tag))
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
 
     Ok(())
 }

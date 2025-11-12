@@ -108,9 +108,10 @@ impl Options {
 
         new_path.to_string_lossy().into_owned()
     }
+}
 
-    /// Create Options with default values for testing
-    pub fn default() -> Self {
+impl Default for Options {
+    fn default() -> Self {
         Options {
             apparent_size: false,
             cross_mount_points: false,
@@ -357,7 +358,10 @@ mod tests {
         // On non-Windows, backslash is a normal char, so the string stays as-is.
         let input_win_style_with_dot = "C:\\dir\\file.";
         let expected_win_style_with_dot = if cfg!(windows) {
-            std::path::Path::new("C:\\dir").join("file.gpscan").to_string_lossy().into_owned()
+            std::path::Path::new("C:\\dir")
+                .join("file.gpscan")
+                .to_string_lossy()
+                .into_owned()
         } else {
             "C:\\dir\\file.gpscan".to_string()
         };
@@ -365,17 +369,20 @@ mod tests {
             Options::process_output_filename(input_win_style_with_dot),
             expected_win_style_with_dot
         );
-        assert_eq!(
-            Options::process_output_filename("C:\\dir\\"),
-            "C:\\dir\\"
-        );
+        assert_eq!(Options::process_output_filename("C:\\dir\\"), "C:\\dir\\");
         let input_win_style = "C:\\dir\\file";
         let expected_win_style = if cfg!(windows) {
-            std::path::Path::new("C:\\dir").join("file.gpscan").to_string_lossy().into_owned()
+            std::path::Path::new("C:\\dir")
+                .join("file.gpscan")
+                .to_string_lossy()
+                .into_owned()
         } else {
             "C:\\dir\\file.gpscan".to_string()
         };
-        assert_eq!(Options::process_output_filename(input_win_style), expected_win_style);
+        assert_eq!(
+            Options::process_output_filename(input_win_style),
+            expected_win_style
+        );
         assert_eq!(
             Options::process_output_filename("C:\\dir\\file.gpscan"),
             "C:\\dir\\file.gpscan"

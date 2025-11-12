@@ -90,7 +90,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
                     if ans != "y" && ans != "yes" {
                         let msg = "Operation cancelled by user".to_string();
                         error!("{}", msg);
-                        return Err(io::Error::new(io::ErrorKind::Other, msg));
+                        return Err(io::Error::other(msg));
                     }
                 } else {
                     let msg = format!(
@@ -98,7 +98,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
                         filename
                     );
                     error!("{}", msg);
-                    return Err(io::Error::new(io::ErrorKind::Other, msg));
+                    return Err(io::Error::other(msg));
                 }
             }
             let file = fs::File::create(filename)?;
@@ -138,7 +138,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     scan_info.push_attribute(("fileSizeMeasure", measure));
     writer
         .write_event(Event::Start(scan_info))
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
 
     // Create a set to store visited inodes
     let mut visited_inodes = HashSet::new();
@@ -156,17 +156,17 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     // </ScanInfo> tag
     writer
         .write_event(Event::End(BytesEnd::new(TAG_SCAN_INFO)))
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
     // </GrandPerspectiveScanDump> tag
     writer
         .write_event(Event::End(BytesEnd::new(TAG_GRANDPERSPECTIVE_SCAN_DUMP)))
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
 
     // Add final newline for consistency with quick-xml Writer (always uses \n)
     writer
         .get_mut()
         .write_all(b"\n")
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
 
     Ok(())
 }
