@@ -1,4 +1,3 @@
-use assert_cmd::Command;
 use flate2::read::GzDecoder;
 use predicates::prelude::*;
 use std::fs::{self, File};
@@ -138,14 +137,14 @@ fn test_non_tty_overwrite_requires_force() {
 
     // 1) Create initial output file so the target exists
     let expected_output = dir_path.join("data.gpscan");
-    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
     cmd.arg(dir_path.to_str().unwrap()).arg("-o").arg("data");
     cmd.current_dir(dir_path);
     cmd.assert().success();
     assert!(expected_output.exists());
 
     // 2) In non-TTY (test runner is non-TTY), without --force -> expect failure
-    let mut cmd2 = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    let mut cmd2 = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
     cmd2.arg(dir_path.to_str().unwrap()).arg("-o").arg("data");
     cmd2.current_dir(dir_path);
     cmd2.assert().failure().stderr(predicate::str::contains(
@@ -160,14 +159,14 @@ fn test_non_tty_overwrite_with_force_succeeds() {
 
     // 1) Create the initial target file
     let target_output = dir_path.join("target.gpscan");
-    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
     cmd.arg(dir_path.to_str().unwrap()).arg("-o").arg("target");
     cmd.current_dir(dir_path);
     cmd.assert().success();
     assert!(target_output.exists());
 
     // 2) In non-TTY, with --force -> expect success
-    let mut cmd2 = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    let mut cmd2 = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
     cmd2.arg(dir_path.to_str().unwrap())
         .arg("-o")
         .arg("target")
@@ -245,7 +244,7 @@ fn test_gpscan_with_output_file() {
     let expected_output_file_path = dir_path.join("output.xml.gpscan");
 
     // Run `gpscan` with an output file specified
-    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
     cmd.arg(dir_path.to_str().unwrap())
         .arg("-o")
         .arg("output.xml");
@@ -273,7 +272,7 @@ fn test_gpscan_invalid_output_path() {
     let invalid_output_path = dir_path.join("nonexistent_directory/output.xml");
 
     // Run `gpscan` with an invalid output file path
-    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
     cmd.arg(dir_path.to_str().unwrap())
         .arg("-o")
         .arg(invalid_output_path.to_str().unwrap());
@@ -301,7 +300,7 @@ fn test_gpscan_with_gzip_compression() {
     // Test file output - should be gzip compressed by default with .gpscan extension
     // Input: "output.xml.gz" -> Output: "output.xml.gz.gpscan" (gzip compressed)
     let expected_output_file_path = dir_path.join("output.xml.gz.gpscan");
-    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
     cmd.arg(dir_path.to_str().unwrap())
         .arg("-o")
         .arg("output.xml.gz");
@@ -330,7 +329,7 @@ fn test_gpscan_with_gzip_compression() {
     let dir_path2 = temp_dir2.path();
 
     let expected_output_file_path2 = dir_path2.join("output2.gpscan");
-    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
     cmd.arg(dir_path2.to_str().unwrap())
         .arg("-o")
         .arg("output2")
@@ -364,7 +363,7 @@ fn test_gpscan_with_auto_gzip_detection() {
 
     // Test file output with .gpscan extension - should be gzip compressed by default
     let expected_output_file_path = dir_path.join("auto_output.gpscan");
-    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
     cmd.arg(dir_path.to_str().unwrap())
         .arg("-o")
         .arg("auto_output.gpscan");
@@ -390,7 +389,7 @@ fn test_gpscan_stdout_compression() {
     let dir_path = temp_dir.path();
 
     // Test stdout without --gzip flag - should output plain text
-    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
     cmd.arg(dir_path.to_str().unwrap());
     let output = cmd.output().expect("Failed to execute gpscan");
     let stdout_content = String::from_utf8_lossy(&output.stdout);
@@ -400,7 +399,7 @@ fn test_gpscan_stdout_compression() {
     assert_file_in_xml(&stdout_content, "file1.txt", true);
 
     // Test stdout with --gzip flag - should output compressed data
-    let mut cmd = Command::cargo_bin("gpscan").expect("Failed to build gpscan");
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
     cmd.arg(dir_path.to_str().unwrap()).arg("--gzip");
     let output = cmd.output().expect("Failed to execute gpscan");
 
