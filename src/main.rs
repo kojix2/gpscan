@@ -1,6 +1,6 @@
 // External library imports
 use env_logger::Builder;
-use log::LevelFilter;
+use log::{info, LevelFilter};
 
 // Standard library imports
 use std::io::Write;
@@ -38,12 +38,8 @@ fn main() {
     // Run the program
     let result = run(matches);
 
-    // Print execution time
-    // This will be printed even if quiet mode is enabled
-    eprintln!(
-        "[gpscan] [INFO] Execution time: {:.2?}",
-        start_time.elapsed()
-    );
+    // Print execution time via logger (respects quiet mode)
+    info!("Execution time: {:.2?}", start_time.elapsed());
 
     // Handle the result and set appropriate exit code
     if let Err(e) = result {
