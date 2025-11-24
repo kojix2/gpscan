@@ -110,7 +110,7 @@ pub fn traverse_directory_to_xml<W: Write>(
         if ft.is_file() {
             file_entries.push((entry_path, entry_metadata));
         } else if ft.is_dir() {
-            dir_entries.push((entry_path, entry_metadata));
+            dir_entries.push(entry_path);
         } else {
             warn!("Unknown file type: {}", entry_path.display());
         }
@@ -127,9 +127,7 @@ pub fn traverse_directory_to_xml<W: Write>(
         )?;
     }
     // Then directories (depth-first behavior preserved; only sibling ordering changes)
-    for (entry_path, entry_metadata) in dir_entries {
-        // entry_metadata is currently unused but may be used for flags in the future
-        let _ = entry_metadata; // suppress unused warning if any
+    for entry_path in dir_entries {
         traverse_directory_to_xml(
             &entry_path,
             false,
