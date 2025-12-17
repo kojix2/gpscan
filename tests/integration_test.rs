@@ -76,8 +76,8 @@ fn run_gpscan(dir_path: &Path, args: &[&str]) -> String {
     for arg in args {
         cmd.arg(arg);
     }
-    let output = cmd.output().expect("Failed to execute gpscan");
-    String::from_utf8_lossy(&output.stdout).to_string()
+    let stdout = cmd.assert().success().get_output().stdout.clone();
+    String::from_utf8_lossy(&stdout).to_string()
 }
 
 /// Helper function to verify XML structure
@@ -391,8 +391,10 @@ fn test_gpscan_stdout_compression() {
     // Test stdout without --gzip flag - should output plain text
     let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
     cmd.arg(dir_path.to_str().unwrap());
-    let output = cmd.output().expect("Failed to execute gpscan");
-    let stdout_content = String::from_utf8_lossy(&output.stdout);
+    let stdout_content = {
+        let stdout = cmd.assert().success().get_output().stdout.clone();
+        String::from_utf8_lossy(&stdout).to_string()
+    };
 
     // Should be plain XML
     assert_xml_structure(&stdout_content);
@@ -401,11 +403,10 @@ fn test_gpscan_stdout_compression() {
     // Test stdout with --gzip flag - should output compressed data
     let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
     cmd.arg(dir_path.to_str().unwrap()).arg("--gzip");
-    let output = cmd.output().expect("Failed to execute gpscan");
+    let stdout_bytes = cmd.assert().success().get_output().stdout.clone();
 
     // The output should be gzip compressed (binary data)
     // We can verify this by checking that it's not valid UTF-8 plain text XML
-    let stdout_bytes = &output.stdout;
     assert!(!stdout_bytes.is_empty(), "No output received");
 
     // Gzip files start with magic bytes 0x1f, 0x8b
