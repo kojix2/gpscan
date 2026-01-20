@@ -28,6 +28,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
         .as_str();
 
     let root_path = Path::new(directory);
+    let root_path_abs = fs::canonicalize(root_path).unwrap_or_else(|_| root_path.to_path_buf());
 
     // Check if the provided path exists
     if !root_path.exists() {
@@ -50,21 +51,21 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     let option = Options::from_matches(&matches);
 
     // Get the device ID of the root directory
-    let root_metadata = fs::metadata(root_path)?;
+    let root_metadata = fs::metadata(&root_path_abs)?;
     let root_dev = root_metadata.device_id();
 
     // Create Disks instance and refresh disk list
     let disks = Disks::new_with_refreshed_list();
 
     // Get volume information
-    let (volume_path, volume_size, free_space) = get_volume_info(root_path, &disks);
+    let (volume_path, volume_size, free_space) = get_volume_info(&root_path_abs, &disks);
     let volume_root = Path::new(&volume_path);
-    let root_label = match root_path.strip_prefix(volume_root) {
+    let root_label = match root_path_abs.strip_prefix(volume_root) {
         Ok(rel) => rel
             .to_string_lossy()
             .trim_start_matches(std::path::MAIN_SEPARATOR)
             .to_string(),
-        Err(_) => root_path.display().to_string(),
+        Err(_) => root_path_abs.display().to_string(),
     };
 
     // Create a write handle with compression support
@@ -153,7 +154,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
 
     // Start traversing the directory with new options
     traverse_directory_to_xml(
-        root_path,
+        &root_path_abs,
         true,
         &root_label,
         root_dev,
