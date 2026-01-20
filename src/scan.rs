@@ -17,6 +17,7 @@ use crate::xml_output::{get_file_times, TAG_FILE, TAG_FOLDER};
 pub fn traverse_directory_to_xml<W: Write>(
     path: &Path,
     is_root: bool,
+    root_label: &str,
     root_dev: u64,
     options: &Options,
     visited_inodes: &mut HashSet<u64>,
@@ -48,7 +49,7 @@ pub fn traverse_directory_to_xml<W: Write>(
 
     // Get directory name
     let name = if is_root {
-        path.display().to_string()
+        root_label.to_string()
     } else {
         path.file_name()
             .unwrap_or(path.as_os_str())
@@ -131,6 +132,7 @@ pub fn traverse_directory_to_xml<W: Write>(
         traverse_directory_to_xml(
             &entry_path,
             false,
+            root_label,
             root_dev,
             options,
             visited_inodes,

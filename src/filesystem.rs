@@ -58,6 +58,14 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
 
     // Get volume information
     let (volume_path, volume_size, free_space) = get_volume_info(root_path, &disks);
+    let volume_root = Path::new(&volume_path);
+    let root_label = match root_path.strip_prefix(volume_root) {
+        Ok(rel) => rel
+            .to_string_lossy()
+            .trim_start_matches(std::path::MAIN_SEPARATOR)
+            .to_string(),
+        Err(_) => root_path.display().to_string(),
+    };
 
     // Create a write handle with compression support
     let handle: Box<dyn Write> = match &option.output_filename {
@@ -147,6 +155,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     traverse_directory_to_xml(
         root_path,
         true,
+        &root_label,
         root_dev,
         &option,
         &mut visited_inodes,
