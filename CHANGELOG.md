@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.3] - 2026-01-20
+
+Changed:
+- Root folder name now displays as volume-relative path instead of full filesystem path
+
+## [0.1.2] - 2025-12-18
+
+Changed:
+- Execution time now logged via logger (respects `--quiet` flag)
+
+## [0.1.1] - 2025-11-12
+
+Changed:
+- Improved cross-platform path handling for output filenames
+
 ## [0.1.0] - 2025-09-12
 
 Highlights:
