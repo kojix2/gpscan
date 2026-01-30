@@ -1,6 +1,15 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+Notable changes to this project will be documented in this file.
+
+## [0.1.4] - 2026-01-30
+
+Fixed:
+- Control characters in filenames and directory names now properly escaped as numeric entities (e.g., `&#xC;`)
+- GrandPerspective can now read XML files with control characters in filenames
+
+Changed:
+- XML version upgraded from 1.0 to 1.1 for specification compliance with control character numeric entities
 
 ## [0.1.3] - 2026-01-20
 
