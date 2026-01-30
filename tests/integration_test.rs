@@ -84,7 +84,7 @@ fn run_gpscan(dir_path: &Path, args: &[&str]) -> String {
 fn assert_xml_structure(xml_content: &str) {
     assert!(
         predicate::str::starts_with(
-            r#"<?xml version="1.0" encoding="UTF-8"?>
+            r#"<?xml version="1.1" encoding="UTF-8"?>
 <GrandPerspectiveScanDump"#
         )
         .eval(xml_content),

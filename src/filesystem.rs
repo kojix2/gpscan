@@ -17,7 +17,9 @@ use crate::options::Options;
 use crate::platform::MetadataExtOps;
 use crate::scan::traverse_directory_to_xml;
 use crate::volume::get_volume_info;
-use crate::xml_output::{output_xml_header, TAG_GRANDPERSPECTIVE_SCAN_DUMP, TAG_SCAN_INFO};
+use crate::xml_output::{
+    output_xml_header, sanitize_for_xml, TAG_GRANDPERSPECTIVE_SCAN_DUMP, TAG_SCAN_INFO,
+};
 
 /// Runs the main logic of the program.
 pub fn run(matches: ArgMatches) -> io::Result<()> {
@@ -132,10 +134,8 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     // Output the scan information
     let scan_time = Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
     let mut scan_info = BytesStart::new(TAG_SCAN_INFO);
-    scan_info.push_attribute((
-        "volumePath",
-        quick_xml::escape::escape(&volume_path).as_ref(),
-    ));
+    let sanitized_volume_path = sanitize_for_xml(&volume_path);
+    scan_info.push_attribute(("volumePath", sanitized_volume_path.as_str()));
     scan_info.push_attribute(("volumeSize", volume_size.to_string().as_str()));
     scan_info.push_attribute(("freeSpace", free_space.to_string().as_str()));
     scan_info.push_attribute(("scanTime", scan_time.to_string().as_str()));

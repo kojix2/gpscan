@@ -11,7 +11,7 @@ use std::path::Path;
 
 use crate::options::Options;
 use crate::platform::MetadataExtOps;
-use crate::xml_output::{get_file_times, TAG_FILE, TAG_FOLDER};
+use crate::xml_output::{get_file_times, sanitize_for_xml, TAG_FILE, TAG_FOLDER};
 
 /// Recursively traverses the directory and outputs XML.
 pub fn traverse_directory_to_xml<W: Write>(
@@ -78,7 +78,8 @@ pub fn traverse_directory_to_xml<W: Write>(
 
     // Output Folder tag
     let mut folder_tag = BytesStart::new(TAG_FOLDER);
-    folder_tag.push_attribute(("name", quick_xml::escape::escape(&name).as_ref()));
+    let sanitized_name = sanitize_for_xml(&name);
+    folder_tag.push_attribute(("name", sanitized_name.as_str()));
     folder_tag.push_attribute(("created", created.as_str()));
     folder_tag.push_attribute(("modified", modified.as_str()));
     folder_tag.push_attribute(("accessed", accessed.as_str()));
@@ -188,7 +189,8 @@ pub fn process_file_entry<W: Write>(
 
     // Output File tag
     let mut file_tag = BytesStart::new(TAG_FILE);
-    file_tag.push_attribute(("name", quick_xml::escape::escape(&name).as_ref()));
+    let sanitized_name = sanitize_for_xml(&name);
+    file_tag.push_attribute(("name", sanitized_name.as_str()));
     file_tag.push_attribute(("size", size.to_string().as_str()));
     file_tag.push_attribute(("created", created.as_str()));
     file_tag.push_attribute(("modified", modified.as_str()));
