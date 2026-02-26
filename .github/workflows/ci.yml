@@ -30,7 +30,7 @@ jobs:
         run: |
           cargo install --path . 
           gpscan . 2> error.log 1> output.gpscan
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: scan-results-${{ matrix.os }}
           path: |
