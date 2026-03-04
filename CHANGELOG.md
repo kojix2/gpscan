@@ -2,6 +2,13 @@
 
 Notable changes to this project will be documented in this file.
 
+## [0.1.5] - 2026-03-04
+
+Fixed:
+- Exit with error code 1 when the root directory is unreadable
+- Use `(device_id, inode)` for hard-link deduplication to avoid false skips with `--mounts`
+- Replace `atty` (RUSTSEC-2021-0145) with `std::io::IsTerminal`
+
 ## [0.1.4] - 2026-01-30
 
 Fixed:
