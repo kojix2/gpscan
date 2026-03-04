@@ -20,13 +20,18 @@ pub fn traverse_directory_to_xml<W: Write>(
     root_label: &str,
     root_dev: u64,
     options: &Options,
-    visited_inodes: &mut HashSet<u64>,
+    visited_inodes: &mut HashSet<(u64, u64)>,
     writer: &mut Writer<W>,
 ) -> io::Result<()> {
-    // Get metadata of the current directory
-    let metadata = match get_metadata(path) {
+    // Get metadata of the current directory (suppress internal log for root; main.rs will print it)
+    let metadata = match get_metadata_impl(path, !is_root) {
         Ok(metadata) => metadata,
-        Err(_) => return Ok(()),
+        Err(e) => {
+            if is_root {
+                return Err(e);
+            }
+            return Ok(());
+        }
     };
 
     // Check if the current directory is on a different filesystem
@@ -57,10 +62,15 @@ pub fn traverse_directory_to_xml<W: Write>(
             .to_string()
     };
 
-    // Read directory entries
-    let mut entries: Vec<_> = match read_directory(path) {
+    // Read directory entries (suppress internal log for root; main.rs will print it)
+    let mut entries: Vec<_> = match read_directory_impl(path, !is_root) {
         Ok(entries) => entries,
-        Err(_) => return Ok(()),
+        Err(e) => {
+            if is_root {
+                return Err(e);
+            }
+            return Ok(());
+        }
     };
 
     // Check if the folder is empty and should be skipped
@@ -153,20 +163,20 @@ pub fn process_file_entry<W: Write>(
     path: &Path,
     metadata: &Metadata,
     options: &Options,
-    visited_inodes: &mut HashSet<u64>,
+    visited_inodes: &mut HashSet<(u64, u64)>,
     writer: &mut Writer<W>,
 ) -> io::Result<()> {
-    // Get inode number
-    let inode = metadata.inode_number();
+    // Build hard-link identity by filesystem + inode
+    let file_key = (metadata.device_id(), metadata.inode_number());
 
     // Skip if the file is a hard link
-    if visited_inodes.contains(&inode) {
+    if visited_inodes.contains(&file_key) {
         info!("Skipping hard link file: {}", path.display());
         return Ok(());
     }
 
     // Add inode number to the set of visited inodes
-    visited_inodes.insert(inode);
+    visited_inodes.insert(file_key);
 
     // Get file name
     let name = path
@@ -203,21 +213,34 @@ pub fn process_file_entry<W: Write>(
 }
 
 /// Reads the contents of a directory and returns a vector of directory entries.
+/// Set `log_error` to false when the caller will handle and report the error itself.
 pub fn read_directory(path: &Path) -> io::Result<Vec<fs::DirEntry>> {
+    read_directory_impl(path, true)
+}
+
+fn read_directory_impl(path: &Path, log_error: bool) -> io::Result<Vec<fs::DirEntry>> {
     match fs::read_dir(path) {
         Ok(read_dir) => read_dir.collect::<Result<Vec<_>, io::Error>>(),
         Err(e) => {
-            error!("Failed to read directory '{}': {}", path.display(), e);
+            if log_error {
+                error!("Failed to read directory '{}': {}", path.display(), e);
+            }
             Err(e)
         }
     }
 }
 
 pub fn get_metadata(path: &Path) -> io::Result<Metadata> {
+    get_metadata_impl(path, true)
+}
+
+fn get_metadata_impl(path: &Path, log_error: bool) -> io::Result<Metadata> {
     match fs::metadata(path) {
         Ok(metadata) => Ok(metadata),
         Err(e) => {
-            error!("Failed to access metadata for '{}': {}", path.display(), e);
+            if log_error {
+                error!("Failed to access metadata for '{}': {}", path.display(), e);
+            }
             Err(e)
         }
     }
