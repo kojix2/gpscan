@@ -9,7 +9,7 @@ use sysinfo::Disks;
 // Standard library imports
 use std::collections::HashSet;
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::path::Path;
 
 use crate::compression::create_compressed_writer_with_level;
@@ -90,8 +90,8 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
             }
             // Overwrite confirmation when file exists
             if path.exists() && path.is_file() && !option.force_overwrite {
-                let stdout_is_tty = atty::is(atty::Stream::Stdout);
-                let stdin_is_tty = atty::is(atty::Stream::Stdin);
+                let stdout_is_tty = io::stdout().is_terminal();
+                let stdin_is_tty = io::stdin().is_terminal();
                 if stdout_is_tty && stdin_is_tty {
                     eprint!("[gpscan] [WARN] '{}' exists. Overwrite? [y/N]: ", filename);
                     io::stderr().flush().ok();
