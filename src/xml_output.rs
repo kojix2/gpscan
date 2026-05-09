@@ -23,6 +23,7 @@ pub const TAG_FILE: &str = "File";
 /// This function:
 /// 1. Replaces control characters (0x00-0x1F, 0x7F, excluding Tab/LF/CR) with numeric character references
 /// 2. Escapes XML special characters (<, >, &, ", ')
+///
 /// This ensures the output is valid XML that can be parsed by GrandPerspective.
 pub fn sanitize_for_xml(s: &str) -> String {
     let mut result = String::with_capacity(s.len());

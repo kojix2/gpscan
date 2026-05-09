@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use crate::compression::create_compressed_writer_with_level;
 use crate::options::Options;
 use crate::platform::MetadataExtOps;
-use crate::scan::traverse_directory_to_xml_with_output_skip;
+use crate::scan::{traverse_directory_to_xml_with_config, TraversalConfig};
 use crate::volume::get_volume_info;
 use crate::xml_output::{
     output_xml_header, sanitize_for_xml, TAG_GRANDPERSPECTIVE_SCAN_DUMP, TAG_SCAN_INFO,
@@ -160,13 +160,17 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     let mut visited_inodes = HashSet::new();
 
     // Start traversing the directory with new options
-    traverse_directory_to_xml_with_output_skip(
+    let traversal_config = TraversalConfig {
+        root_label: &root_label,
+        root_dev,
+        options: &option,
+        output_path_to_skip: output_path_to_skip.as_deref(),
+    };
+
+    traverse_directory_to_xml_with_config(
         &root_path_abs,
         true,
-        &root_label,
-        root_dev,
-        &option,
-        output_path_to_skip.as_deref(),
+        &traversal_config,
         &mut visited_inodes,
         &mut writer,
     )?;

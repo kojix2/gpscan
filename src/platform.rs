@@ -53,9 +53,9 @@ impl MetadataExtOps for Metadata {
 
     fn file_size(&self, apparent: bool) -> u64 {
         if apparent {
-            self.st_size() as u64
+            self.st_size()
         } else {
-            self.st_blocks() as u64 * 512
+            self.st_blocks() * 512
         }
     }
 }

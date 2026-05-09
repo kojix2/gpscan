@@ -13,6 +13,13 @@ use crate::options::Options;
 use crate::platform::{file_identity, MetadataExtOps};
 use crate::xml_output::{get_file_times, sanitize_for_xml, TAG_FILE, TAG_FOLDER};
 
+pub(crate) struct TraversalConfig<'a> {
+    pub(crate) root_label: &'a str,
+    pub(crate) root_dev: u64,
+    pub(crate) options: &'a Options,
+    pub(crate) output_path_to_skip: Option<&'a Path>,
+}
+
 /// Recursively traverses the directory and outputs XML.
 pub fn traverse_directory_to_xml<W: Write>(
     path: &Path,
@@ -23,47 +30,30 @@ pub fn traverse_directory_to_xml<W: Write>(
     visited_inodes: &mut HashSet<(u64, u64)>,
     writer: &mut Writer<W>,
 ) -> io::Result<()> {
-    traverse_directory_to_xml_impl(
-        path,
-        is_root,
+    let config = TraversalConfig {
         root_label,
         root_dev,
         options,
-        None,
-        visited_inodes,
-        writer,
-    )
+        output_path_to_skip: None,
+    };
+
+    traverse_directory_to_xml_impl(path, is_root, &config, visited_inodes, writer)
 }
 
-pub(crate) fn traverse_directory_to_xml_with_output_skip<W: Write>(
+pub(crate) fn traverse_directory_to_xml_with_config<W: Write>(
     path: &Path,
     is_root: bool,
-    root_label: &str,
-    root_dev: u64,
-    options: &Options,
-    output_path_to_skip: Option<&Path>,
+    config: &TraversalConfig<'_>,
     visited_inodes: &mut HashSet<(u64, u64)>,
     writer: &mut Writer<W>,
 ) -> io::Result<()> {
-    traverse_directory_to_xml_impl(
-        path,
-        is_root,
-        root_label,
-        root_dev,
-        options,
-        output_path_to_skip,
-        visited_inodes,
-        writer,
-    )
+    traverse_directory_to_xml_impl(path, is_root, config, visited_inodes, writer)
 }
 
 fn traverse_directory_to_xml_impl<W: Write>(
     path: &Path,
     is_root: bool,
-    root_label: &str,
-    root_dev: u64,
-    options: &Options,
-    output_path_to_skip: Option<&Path>,
+    config: &TraversalConfig<'_>,
     visited_inodes: &mut HashSet<(u64, u64)>,
     writer: &mut Writer<W>,
 ) -> io::Result<()> {
@@ -79,14 +69,14 @@ fn traverse_directory_to_xml_impl<W: Write>(
     };
 
     // Check if the current directory is on a different filesystem
-    if !options.cross_mount_points {
+    if !config.options.cross_mount_points {
         let current_dev = metadata.device_id();
 
-        if current_dev != root_dev {
+        if current_dev != config.root_dev {
             info!(
                 "Skipping directory on different filesystem: {} (root: {}, current: {})",
                 path.display(),
-                root_dev,
+                config.root_dev,
                 current_dev
             );
             return Ok(());
@@ -98,7 +88,7 @@ fn traverse_directory_to_xml_impl<W: Write>(
 
     // Get directory name
     let name = if is_root {
-        root_label.to_string()
+        config.root_label.to_string()
     } else {
         path.file_name()
             .unwrap_or(path.as_os_str())
@@ -118,7 +108,7 @@ fn traverse_directory_to_xml_impl<W: Write>(
     };
 
     // Check if the folder is empty and should be skipped
-    if entries.is_empty() && !options.include_empty_folders {
+    if entries.is_empty() && !config.options.include_empty_folders {
         info!("Skipping empty folder: {}", path.display());
         return Ok(());
     }
@@ -174,7 +164,7 @@ fn traverse_directory_to_xml_impl<W: Write>(
 
     // Files first
     for (entry_path, entry_metadata) in file_entries {
-        if should_skip_output_file(&entry_path, output_path_to_skip) {
+        if should_skip_output_file(&entry_path, config.output_path_to_skip) {
             info!("Skipping output file: {}", entry_path.display());
             continue;
         }
@@ -182,23 +172,14 @@ fn traverse_directory_to_xml_impl<W: Write>(
         process_file_entry(
             &entry_path,
             &entry_metadata,
-            options,
+            config.options,
             visited_inodes,
             writer,
         )?;
     }
     // Then directories (depth-first behavior preserved; only sibling ordering changes)
     for entry_path in dir_entries {
-        traverse_directory_to_xml_impl(
-            &entry_path,
-            false,
-            root_label,
-            root_dev,
-            options,
-            output_path_to_skip,
-            visited_inodes,
-            writer,
-        )?;
+        traverse_directory_to_xml_impl(&entry_path, false, config, visited_inodes, writer)?;
     }
 
     // Close Folder tag
