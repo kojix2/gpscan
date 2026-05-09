@@ -235,6 +235,28 @@ fn test_gpscan_output() {
     );
 }
 
+#[test]
+fn test_gpscan_skips_effectively_empty_folders() {
+    let temp_dir =
+        create_simple_test_directory("gpscan_effectively_empty", "root content", "nested content");
+    let dir_path = temp_dir.path();
+    let empty_after_filtering = dir_path.join("empty_after_filtering");
+    fs::create_dir(&empty_after_filtering).expect("Failed to create test dir");
+    File::create(empty_after_filtering.join("zero-byte.txt")).expect("Failed to create empty file");
+
+    let xml_output = run_gpscan(dir_path, &[]);
+    assert_folder_in_xml(&xml_output, "empty_after_filtering", false);
+    assert_file_in_xml(&xml_output, "zero-byte.txt", false);
+
+    let xml_output_empty = run_gpscan(dir_path, &["--empty-folders"]);
+    assert_folder_in_xml(&xml_output_empty, "empty_after_filtering", true);
+    assert_file_in_xml(&xml_output_empty, "zero-byte.txt", false);
+
+    let xml_output_zero = run_gpscan(dir_path, &["--zero-files"]);
+    assert_folder_in_xml(&xml_output_zero, "empty_after_filtering", true);
+    assert_file_in_xml(&xml_output_zero, "zero-byte.txt", true);
+}
+
 #[cfg(not(target_os = "windows"))]
 #[test]
 fn test_gpscan_escapes_file_names_once() {

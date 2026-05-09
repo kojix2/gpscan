@@ -37,7 +37,7 @@ pub fn traverse_directory_to_xml<W: Write>(
         output_path_to_skip: None,
     };
 
-    traverse_directory_to_xml_impl(path, is_root, &config, visited_inodes, writer)
+    traverse_directory_to_xml_impl(path, is_root, &config, visited_inodes, writer).map(|_| ())
 }
 
 pub(crate) fn traverse_directory_to_xml_with_config<W: Write>(
@@ -47,7 +47,7 @@ pub(crate) fn traverse_directory_to_xml_with_config<W: Write>(
     visited_inodes: &mut HashSet<(u64, u64)>,
     writer: &mut Writer<W>,
 ) -> io::Result<()> {
-    traverse_directory_to_xml_impl(path, is_root, config, visited_inodes, writer)
+    traverse_directory_to_xml_impl(path, is_root, config, visited_inodes, writer).map(|_| ())
 }
 
 fn traverse_directory_to_xml_impl<W: Write>(
@@ -56,7 +56,7 @@ fn traverse_directory_to_xml_impl<W: Write>(
     config: &TraversalConfig<'_>,
     visited_inodes: &mut HashSet<(u64, u64)>,
     writer: &mut Writer<W>,
-) -> io::Result<()> {
+) -> io::Result<bool> {
     // Get metadata of the current directory (suppress internal log for root; main.rs will print it)
     let metadata = match get_metadata_impl(path, !is_root) {
         Ok(metadata) => metadata,
@@ -64,7 +64,7 @@ fn traverse_directory_to_xml_impl<W: Write>(
             if is_root {
                 return Err(e);
             }
-            return Ok(());
+            return Ok(false);
         }
     };
 
@@ -79,7 +79,7 @@ fn traverse_directory_to_xml_impl<W: Write>(
                 config.root_dev,
                 current_dev
             );
-            return Ok(());
+            return Ok(false);
         }
     }
 
@@ -103,15 +103,9 @@ fn traverse_directory_to_xml_impl<W: Write>(
             if is_root {
                 return Err(e);
             }
-            return Ok(());
+            return Ok(false);
         }
     };
-
-    // Check if the folder is empty and should be skipped
-    if entries.is_empty() && !config.options.include_empty_folders {
-        info!("Skipping empty folder: {}", path.display());
-        return Ok(());
-    }
 
     // Sort entries by file name
     entries.sort_by(|a, b| {
@@ -119,17 +113,6 @@ fn traverse_directory_to_xml_impl<W: Write>(
             .to_string_lossy()
             .cmp(&b.file_name().to_string_lossy())
     });
-
-    // Output Folder tag
-    let mut folder_tag = BytesStart::new(TAG_FOLDER);
-    let sanitized_name = sanitize_for_xml(&name);
-    folder_tag.push_attribute(("name", sanitized_name.as_str()));
-    folder_tag.push_attribute(("created", created.as_str()));
-    folder_tag.push_attribute(("modified", modified.as_str()));
-    folder_tag.push_attribute(("accessed", accessed.as_str()));
-    writer
-        .write_event(Event::Start(folder_tag))
-        .map_err(io::Error::other)?;
 
     // GrandPerspective compliance: output File elements before Folder elements (two-pass classification)
     let mut file_entries = Vec::new();
@@ -162,31 +145,64 @@ fn traverse_directory_to_xml_impl<W: Write>(
         }
     }
 
-    // Files first
-    for (entry_path, entry_metadata) in file_entries {
-        if should_skip_output_file(&entry_path, config.output_path_to_skip) {
-            info!("Skipping output file: {}", entry_path.display());
-            continue;
-        }
+    let mut child_buffer = Vec::new();
+    let mut has_output_children = false;
+    {
+        let mut child_writer = Writer::new(&mut child_buffer);
 
-        process_file_entry(
-            &entry_path,
-            &entry_metadata,
-            config.options,
-            visited_inodes,
-            writer,
-        )?;
+        // Files first
+        for (entry_path, entry_metadata) in file_entries {
+            if should_skip_output_file(&entry_path, config.output_path_to_skip) {
+                info!("Skipping output file: {}", entry_path.display());
+                continue;
+            }
+
+            if process_file_entry_impl(
+                &entry_path,
+                &entry_metadata,
+                config.options,
+                visited_inodes,
+                &mut child_writer,
+            )? {
+                has_output_children = true;
+            }
+        }
+        // Then directories (depth-first behavior preserved; only sibling ordering changes)
+        for entry_path in dir_entries {
+            if traverse_directory_to_xml_impl(
+                &entry_path,
+                false,
+                config,
+                visited_inodes,
+                &mut child_writer,
+            )? {
+                has_output_children = true;
+            }
+        }
     }
-    // Then directories (depth-first behavior preserved; only sibling ordering changes)
-    for entry_path in dir_entries {
-        traverse_directory_to_xml_impl(&entry_path, false, config, visited_inodes, writer)?;
+
+    if !has_output_children && !config.options.include_empty_folders {
+        info!("Skipping empty folder: {}", path.display());
+        return Ok(false);
     }
+
+    // Output Folder tag only after verifying that it has visible children, unless empty folders are requested.
+    let mut folder_tag = BytesStart::new(TAG_FOLDER);
+    let sanitized_name = sanitize_for_xml(&name);
+    folder_tag.push_attribute(("name", sanitized_name.as_str()));
+    folder_tag.push_attribute(("created", created.as_str()));
+    folder_tag.push_attribute(("modified", modified.as_str()));
+    folder_tag.push_attribute(("accessed", accessed.as_str()));
+    writer
+        .write_event(Event::Start(folder_tag))
+        .map_err(io::Error::other)?;
+    writer.get_mut().write_all(&child_buffer)?;
 
     // Close Folder tag
     writer
         .write_event(Event::End(BytesEnd::new(TAG_FOLDER)))
         .map_err(io::Error::other)?;
-    Ok(())
+    Ok(true)
 }
 
 /// Processes a file entry and outputs XML.
@@ -197,12 +213,31 @@ pub fn process_file_entry<W: Write>(
     visited_inodes: &mut HashSet<(u64, u64)>,
     writer: &mut Writer<W>,
 ) -> io::Result<()> {
+    process_file_entry_impl(path, metadata, options, visited_inodes, writer).map(|_| ())
+}
+
+fn process_file_entry_impl<W: Write>(
+    path: &Path,
+    metadata: &Metadata,
+    options: &Options,
+    visited_inodes: &mut HashSet<(u64, u64)>,
+    writer: &mut Writer<W>,
+) -> io::Result<bool> {
+    // Get file size (logical or physical depending on options.apparent_size)
+    let size = metadata.file_size(options.apparent_size);
+
+    // Skip zero-byte files if the `include_zero_files` option is not set
+    if size == 0 && !options.include_zero_files {
+        info!("Skipping zero-byte file: {}", path.display());
+        return Ok(false);
+    }
+
     // Build hard-link identity by filesystem + inode/file index.
     if let Some(file_key) = file_identity(path, metadata)? {
         // Skip if the file is a hard link
         if visited_inodes.contains(&file_key) {
             info!("Skipping hard link file: {}", path.display());
-            return Ok(());
+            return Ok(false);
         }
 
         // Add inode number to the set of visited inodes
@@ -215,15 +250,6 @@ pub fn process_file_entry<W: Write>(
         .unwrap_or(path.as_os_str())
         .to_string_lossy()
         .to_string();
-
-    // Get file size (logical or physical depending on options.apparent_size)
-    let size = metadata.file_size(options.apparent_size);
-
-    // Skip zero-byte files if the `include_zero_files` option is not set
-    if size == 0 && !options.include_zero_files {
-        info!("Skipping zero-byte file: {}", path.display());
-        return Ok(());
-    }
 
     // Get file times
     let (created, modified, accessed) = get_file_times(metadata);
@@ -240,7 +266,7 @@ pub fn process_file_entry<W: Write>(
         .write_event(Event::Empty(file_tag))
         .map_err(io::Error::other)?;
 
-    Ok(())
+    Ok(true)
 }
 
 fn should_skip_output_file(path: &Path, output_path_to_skip: Option<&Path>) -> bool {
