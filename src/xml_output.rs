@@ -19,31 +19,26 @@ pub const TAG_GRANDPERSPECTIVE_SCAN_DUMP: &str = "GrandPerspectiveScanDump";
 pub const TAG_FOLDER: &str = "Folder";
 pub const TAG_FILE: &str = "File";
 
-/// Sanitizes and escapes a string for use in XML attributes and content.
-/// This function:
-/// 1. Replaces control characters (0x00-0x1F, 0x7F, excluding Tab/LF/CR) with numeric character references
-/// 2. Escapes XML special characters (<, >, &, ", ')
+/// Sanitizes a string before it is passed to quick-xml for use in attributes.
 ///
-/// This ensures the output is valid XML that can be parsed by GrandPerspective.
+/// XML escaping is deliberately left to quick-xml. This function only replaces
+/// characters that quick-xml does not make XML-safe for us.
+///
+/// This function:
+/// 1. Replaces control characters (0x00-0x1F, 0x7F, excluding Tab/LF/CR) with `?`
+/// 2. Replaces valid XML whitespace (Tab/LF/CR) with spaces for attribute compatibility
 pub fn sanitize_for_xml(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     for c in s.chars() {
         match c {
             // Control characters and DEL (except valid XML whitespace)
             '\x00'..='\x08' | '\x0b'..='\x0c' | '\x0e'..='\x1f' | '\x7f' => {
-                result.push_str(&format!("&#x{:X};", c as u32));
+                result.push('?');
             }
-            // Valid XML whitespace - pass through
+            // Attribute whitespace is normalized for GrandPerspective compatibility.
             '\x09' | '\x0a' | '\x0d' => {
-                result.push(c);
+                result.push(' ');
             }
-            // XML special characters
-            '&' => result.push_str("&amp;"),
-            '<' => result.push_str("&lt;"),
-            '>' => result.push_str("&gt;"),
-            '"' => result.push_str("&quot;"),
-            '\'' => result.push_str("&apos;"),
-            // Regular characters
             _ => result.push(c),
         }
     }
@@ -101,36 +96,52 @@ mod tests {
     #[test]
     fn test_sanitize_for_xml() {
         // Test control character 0x0C (^L)
-        assert_eq!(sanitize_for_xml("file\x0c.txt"), "file&#xC;.txt");
+        assert_eq!(sanitize_for_xml("file\x0c.txt"), "file?.txt");
 
         // Test DEL character (0x7F)
-        assert_eq!(sanitize_for_xml("file\x7f.txt"), "file&#x7F;.txt");
+        assert_eq!(sanitize_for_xml("file\x7f.txt"), "file?.txt");
 
-        // Test multiple control characters (0x0B is vertical tab, should be escaped)
-        assert_eq!(sanitize_for_xml("a\x0cb\x0bc"), "a&#xC;b&#xB;c");
+        // Test multiple control characters (0x0B is vertical tab, should be replaced)
+        assert_eq!(sanitize_for_xml("a\x0cb\x0bc"), "a?b?c");
 
-        // Test that valid XML whitespace is not escaped (Tab, LF, CR are allowed)
-        assert_eq!(sanitize_for_xml("a\tb\nc\rd"), "a\tb\nc\rd");
+        // Test that valid XML whitespace is normalized in attributes
+        assert_eq!(sanitize_for_xml("a\tb\nc\rd"), "a b c d");
 
-        // Test XML special characters
-        assert_eq!(sanitize_for_xml("a&b"), "a&amp;b");
-        assert_eq!(sanitize_for_xml("a<b"), "a&lt;b");
-        assert_eq!(sanitize_for_xml("a>b"), "a&gt;b");
-        assert_eq!(sanitize_for_xml("a\"b"), "a&quot;b");
-        assert_eq!(sanitize_for_xml("a'b"), "a&apos;b");
+        // Test XML special characters are left to quick-xml
+        assert_eq!(sanitize_for_xml("a&b"), "a&b");
+        assert_eq!(sanitize_for_xml("a<b"), "a<b");
+        assert_eq!(sanitize_for_xml("a>b"), "a>b");
+        assert_eq!(sanitize_for_xml("a\"b"), "a\"b");
+        assert_eq!(sanitize_for_xml("a'b"), "a'b");
 
         // Test combined: control character and special character
-        assert_eq!(sanitize_for_xml("file\x0c&.txt"), "file&#xC;&amp;.txt");
+        assert_eq!(sanitize_for_xml("file\x0c&.txt"), "file?&.txt");
 
         // Test normal string
         assert_eq!(sanitize_for_xml("normal.txt"), "normal.txt");
 
         // Test control character at different positions
-        assert_eq!(sanitize_for_xml("\x0cfile"), "&#xC;file");
-        assert_eq!(sanitize_for_xml("file\x0c"), "file&#xC;");
+        assert_eq!(sanitize_for_xml("\x0cfile"), "?file");
+        assert_eq!(sanitize_for_xml("file\x0c"), "file?");
 
         // Test null character
-        assert_eq!(sanitize_for_xml("file\x00.txt"), "file&#x0;.txt");
+        assert_eq!(sanitize_for_xml("file\x00.txt"), "file?.txt");
+    }
+
+    #[test]
+    fn test_quick_xml_escapes_sanitized_attribute_once() {
+        let mut buffer = Cursor::new(Vec::new());
+        let mut writer = Writer::new(&mut buffer);
+        let mut file = BytesStart::new(TAG_FILE);
+        let name = sanitize_for_xml("a&b<c>d\"e'f\x0c.txt");
+
+        file.push_attribute(("name", name.as_str()));
+        writer.write_event(Event::Empty(file)).unwrap();
+
+        let output = String::from_utf8(buffer.into_inner()).unwrap();
+        assert!(output.contains(r#"name="a&amp;b&lt;c&gt;d&quot;e&apos;f?.txt""#));
+        assert!(!output.contains("&amp;amp;"));
+        assert!(!output.contains("&amp;lt;"));
     }
 
     #[test]

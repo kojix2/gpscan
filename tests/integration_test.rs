@@ -235,6 +235,42 @@ fn test_gpscan_output() {
     );
 }
 
+#[cfg(not(target_os = "windows"))]
+#[test]
+fn test_gpscan_escapes_file_names_once() {
+    let temp_dir = TempDir::new("gpscan_xml_escaping").expect("Failed to create temp dir");
+    let dir_path = temp_dir.path();
+
+    let filenames = [
+        "a&b.txt",
+        "a<b.txt",
+        "a>b.txt",
+        "a\"b.txt",
+        "a'b.txt",
+        "file\x0c.txt",
+    ];
+
+    for filename in filenames {
+        let mut file = File::create(dir_path.join(filename)).expect("Failed to create test file");
+        writeln!(file, "content").expect("Failed to write test file");
+    }
+
+    let xml_output = run_gpscan(dir_path, &[]);
+
+    assert!(xml_output.contains(r#"<File name="a&amp;b.txt""#));
+    assert!(xml_output.contains(r#"<File name="a&lt;b.txt""#));
+    assert!(xml_output.contains(r#"<File name="a&gt;b.txt""#));
+    assert!(xml_output.contains(r#"<File name="a&quot;b.txt""#));
+    assert!(xml_output.contains(r#"<File name="a&apos;b.txt""#));
+    assert!(xml_output.contains(r#"<File name="file?.txt""#));
+    assert!(!xml_output.contains("&amp;amp;"));
+    assert!(!xml_output.contains("&amp;lt;"));
+    assert!(!xml_output.contains("&amp;gt;"));
+    assert!(!xml_output.contains("&amp;quot;"));
+    assert!(!xml_output.contains("&amp;apos;"));
+    assert_xml_structure(&xml_output);
+}
+
 #[test]
 fn test_gpscan_with_output_file() {
     let temp_dir = create_simple_test_directory("gpscan_test_output", "Content for file1", "");
