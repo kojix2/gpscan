@@ -10,7 +10,7 @@ use std::io::{self, Write};
 use std::path::Path;
 
 use crate::options::Options;
-use crate::platform::MetadataExtOps;
+use crate::platform::{file_identity, MetadataExtOps};
 use crate::xml_output::{get_file_times, sanitize_for_xml, TAG_FILE, TAG_FOLDER};
 
 /// Recursively traverses the directory and outputs XML.
@@ -166,11 +166,8 @@ pub fn process_file_entry<W: Write>(
     visited_inodes: &mut HashSet<(u64, u64)>,
     writer: &mut Writer<W>,
 ) -> io::Result<()> {
-    // Build hard-link identity by filesystem + inode. Some platforms may report
-    // (0, 0) when a stable file identity is unavailable; do not deduplicate on
-    // that placeholder or every file would look like the same hard link.
-    let file_key = (metadata.device_id(), metadata.inode_number());
-    if file_key != (0, 0) {
+    // Build hard-link identity by filesystem + inode/file index.
+    if let Some(file_key) = file_identity(path, metadata)? {
         // Skip if the file is a hard link
         if visited_inodes.contains(&file_key) {
             info!("Skipping hard link file: {}", path.display());

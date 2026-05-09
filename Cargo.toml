@@ -16,6 +16,9 @@ log = "0.4"
 quick-xml = "0.39"
 sysinfo = "0.39"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+
 [dev-dependencies]
 tempdir = "0.3"
 assert_cmd = "2.0"

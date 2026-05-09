@@ -1,15 +1,44 @@
 use std::fs::Metadata;
+use std::io;
+use std::path::Path;
 #[cfg(target_os = "linux")]
 use std::os::linux::fs::MetadataExt;
 #[cfg(any(target_os = "freebsd", target_os = "macos"))]
 use std::os::unix::fs::MetadataExt;
 #[cfg(target_os = "windows")]
-use std::os::windows::fs::MetadataExt;
+use std::os::windows::io::AsRawHandle;
+
+pub type FileIdentity = (u64, u64);
 
 pub trait MetadataExtOps {
     fn device_id(&self) -> u64;
     fn inode_number(&self) -> u64;
     fn file_size(&self, apparent: bool) -> u64;
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn file_identity(_path: &Path, metadata: &Metadata) -> io::Result<Option<FileIdentity>> {
+    let identity = (metadata.device_id(), metadata.inode_number());
+    Ok((identity != (0, 0)).then_some(identity))
+}
+
+#[cfg(target_os = "windows")]
+pub fn file_identity(path: &Path, _metadata: &Metadata) -> io::Result<Option<FileIdentity>> {
+    use std::fs::File;
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+    };
+
+    let file = File::open(path)?;
+    let mut info = BY_HANDLE_FILE_INFORMATION::default();
+    let ok = unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut info) };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+
+    let file_index = ((info.nFileIndexHigh as u64) << 32) | info.nFileIndexLow as u64;
+    let identity = (info.dwVolumeSerialNumber as u64, file_index);
+    Ok((identity != (0, 0)).then_some(identity))
 }
 
 #[cfg(target_os = "linux")]
@@ -53,20 +82,14 @@ impl MetadataExtOps for Metadata {
 #[cfg(target_os = "windows")]
 impl MetadataExtOps for Metadata {
     fn device_id(&self) -> u64 {
-        // NOTE: Previously used `volume_serial_number()` from unstable `windows_by_handle` feature.
-        // To maintain compatibility with Rust stable, we return 0 as a placeholder.
-        // This method is currently unused in the codebase (dead code).
-        // If `windows_by_handle` is stabilized in the future, we can restore the actual implementation:
-        //   self.volume_serial_number().unwrap_or(0) as u64
+        // `std::os::windows::fs::MetadataExt::volume_serial_number()` is still unstable.
+        // Use `file_identity` when stable file identity is needed.
         0
     }
 
     fn inode_number(&self) -> u64 {
-        // NOTE: Previously used `file_index()` from unstable `windows_by_handle` feature.
-        // To maintain compatibility with Rust stable, we return 0 as a placeholder.
-        // This method is currently unused in the codebase (dead code).
-        // If `windows_by_handle` is stabilized in the future, we can restore the actual implementation:
-        //   self.file_index().unwrap_or(0)
+        // `std::os::windows::fs::MetadataExt::file_index()` is still unstable.
+        // Use `file_identity` when stable file identity is needed.
         0
     }
 
