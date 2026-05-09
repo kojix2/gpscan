@@ -2,12 +2,28 @@ use flate2::read::GzDecoder;
 use predicates::prelude::*;
 use std::fs::{self, File};
 use std::io::{Read, Write};
-#[cfg(not(target_os = "windows"))]
-use std::os::unix::fs::symlink;
-#[cfg(target_os = "windows")]
-use std::os::windows::fs::symlink_file as symlink;
 use std::path::Path;
 use tempdir::TempDir;
+
+#[cfg(not(target_os = "windows"))]
+fn create_file_symlink(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(src, dst)
+}
+
+#[cfg(target_os = "windows")]
+fn create_file_symlink(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_file(src, dst)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn create_dir_symlink(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(src, dst)
+}
+
+#[cfg(target_os = "windows")]
+fn create_dir_symlink(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_dir(src, dst)
+}
 
 /// Helper function to create a test directory structure
 fn create_test_directory(name: &str) -> TempDir {
@@ -33,12 +49,12 @@ fn create_test_directory(name: &str) -> TempDir {
     fs::create_dir(dir_path.join("empty_dir")).expect("Failed to create empty_dir");
 
     // Create symbolic links
-    symlink(
+    create_file_symlink(
         dir_path.join("file1.txt"),
         dir_path.join("symlink_to_file1"),
     )
     .expect("Failed to create symlink to file1");
-    symlink(dir_path.join("subdir"), dir_path.join("symlink_to_subdir"))
+    create_dir_symlink(dir_path.join("subdir"), dir_path.join("symlink_to_subdir"))
         .expect("Failed to create symlink to subdir");
 
     // Create a hard link inside the subdirectory
