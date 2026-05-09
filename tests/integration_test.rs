@@ -260,7 +260,26 @@ fn test_gpscan_with_output_file() {
     // Decompress and verify the output
     let decompressed_content = decompress_gzip_file(&expected_output_file_path);
     assert_file_in_xml(&decompressed_content, "file1.txt", true);
+    assert_file_in_xml(&decompressed_content, "output.xml.gpscan", false);
     assert_xml_structure(&decompressed_content);
+}
+
+#[test]
+fn test_gpscan_skips_output_file_inside_scanned_directory() {
+    let temp_dir = create_simple_test_directory("gpscan_skip_own_output", "Content for file1", "");
+    let dir_path = temp_dir.path();
+    let expected_output_file_path = dir_path.join("result.gpscan");
+
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
+    cmd.arg(".").arg("-o").arg("result").arg("--no-gzip");
+    cmd.current_dir(dir_path);
+    cmd.assert().success();
+
+    let content =
+        fs::read_to_string(&expected_output_file_path).expect("Failed to read output file");
+    assert_file_in_xml(&content, "file1.txt", true);
+    assert_file_in_xml(&content, "result.gpscan", false);
+    assert_xml_structure(&content);
 }
 
 #[test]

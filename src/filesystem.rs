@@ -10,12 +10,12 @@ use sysinfo::Disks;
 use std::collections::HashSet;
 use std::fs;
 use std::io::{self, IsTerminal, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::compression::create_compressed_writer_with_level;
 use crate::options::Options;
 use crate::platform::MetadataExtOps;
-use crate::scan::traverse_directory_to_xml;
+use crate::scan::traverse_directory_to_xml_with_output_skip;
 use crate::volume::get_volume_info;
 use crate::xml_output::{
     output_xml_header, sanitize_for_xml, TAG_GRANDPERSPECTIVE_SCAN_DUMP, TAG_SCAN_INFO,
@@ -71,7 +71,9 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     };
 
     // Create a write handle with compression support
-    let handle: Box<dyn Write> = match &option.output_filename {
+    let (handle, output_path_to_skip): (Box<dyn Write>, Option<PathBuf>) = match &option
+        .output_filename
+    {
         Some(filename) => {
             // Validate that the provided output is not a directory-like path
             // Note: We only check obvious cases (ends_with separator or path exists and is dir)
@@ -113,17 +115,22 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
                 }
             }
             let file = fs::File::create(filename)?;
-            create_compressed_writer_with_level(
+            let output_path_to_skip = fs::canonicalize(filename).ok();
+            let handle = create_compressed_writer_with_level(
                 file,
                 option.compression_type,
                 option.compression_level,
-            )?
+            )?;
+            (handle, output_path_to_skip)
         }
-        None => create_compressed_writer_with_level(
-            io::stdout(),
-            option.compression_type,
-            option.compression_level,
-        )?,
+        None => (
+            create_compressed_writer_with_level(
+                io::stdout(),
+                option.compression_type,
+                option.compression_level,
+            )?,
+            None,
+        ),
     };
 
     let mut writer = Writer::new_with_indent(handle, b' ', 0);
@@ -153,12 +160,13 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     let mut visited_inodes = HashSet::new();
 
     // Start traversing the directory with new options
-    traverse_directory_to_xml(
+    traverse_directory_to_xml_with_output_skip(
         &root_path_abs,
         true,
         &root_label,
         root_dev,
         &option,
+        output_path_to_skip.as_deref(),
         &mut visited_inodes,
         &mut writer,
     )?;

@@ -23,6 +23,50 @@ pub fn traverse_directory_to_xml<W: Write>(
     visited_inodes: &mut HashSet<(u64, u64)>,
     writer: &mut Writer<W>,
 ) -> io::Result<()> {
+    traverse_directory_to_xml_impl(
+        path,
+        is_root,
+        root_label,
+        root_dev,
+        options,
+        None,
+        visited_inodes,
+        writer,
+    )
+}
+
+pub(crate) fn traverse_directory_to_xml_with_output_skip<W: Write>(
+    path: &Path,
+    is_root: bool,
+    root_label: &str,
+    root_dev: u64,
+    options: &Options,
+    output_path_to_skip: Option<&Path>,
+    visited_inodes: &mut HashSet<(u64, u64)>,
+    writer: &mut Writer<W>,
+) -> io::Result<()> {
+    traverse_directory_to_xml_impl(
+        path,
+        is_root,
+        root_label,
+        root_dev,
+        options,
+        output_path_to_skip,
+        visited_inodes,
+        writer,
+    )
+}
+
+fn traverse_directory_to_xml_impl<W: Write>(
+    path: &Path,
+    is_root: bool,
+    root_label: &str,
+    root_dev: u64,
+    options: &Options,
+    output_path_to_skip: Option<&Path>,
+    visited_inodes: &mut HashSet<(u64, u64)>,
+    writer: &mut Writer<W>,
+) -> io::Result<()> {
     // Get metadata of the current directory (suppress internal log for root; main.rs will print it)
     let metadata = match get_metadata_impl(path, !is_root) {
         Ok(metadata) => metadata,
@@ -130,6 +174,11 @@ pub fn traverse_directory_to_xml<W: Write>(
 
     // Files first
     for (entry_path, entry_metadata) in file_entries {
+        if should_skip_output_file(&entry_path, output_path_to_skip) {
+            info!("Skipping output file: {}", entry_path.display());
+            continue;
+        }
+
         process_file_entry(
             &entry_path,
             &entry_metadata,
@@ -140,12 +189,13 @@ pub fn traverse_directory_to_xml<W: Write>(
     }
     // Then directories (depth-first behavior preserved; only sibling ordering changes)
     for entry_path in dir_entries {
-        traverse_directory_to_xml(
+        traverse_directory_to_xml_impl(
             &entry_path,
             false,
             root_label,
             root_dev,
             options,
+            output_path_to_skip,
             visited_inodes,
             writer,
         )?;
@@ -210,6 +260,16 @@ pub fn process_file_entry<W: Write>(
         .map_err(io::Error::other)?;
 
     Ok(())
+}
+
+fn should_skip_output_file(path: &Path, output_path_to_skip: Option<&Path>) -> bool {
+    output_path_to_skip
+        .and_then(|output_path_to_skip| {
+            fs::canonicalize(path)
+                .ok()
+                .map(|canonical_path| canonical_path == output_path_to_skip)
+        })
+        .unwrap_or(false)
 }
 
 /// Reads the contents of a directory and returns a vector of directory entries.

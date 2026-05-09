@@ -1,12 +1,12 @@
 use std::fs::Metadata;
 use std::io;
-use std::path::Path;
 #[cfg(target_os = "linux")]
 use std::os::linux::fs::MetadataExt;
 #[cfg(any(target_os = "freebsd", target_os = "macos"))]
 use std::os::unix::fs::MetadataExt;
 #[cfg(target_os = "windows")]
 use std::os::windows::io::AsRawHandle;
+use std::path::Path;
 
 pub type FileIdentity = (u64, u64);
 
