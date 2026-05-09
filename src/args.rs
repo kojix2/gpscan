@@ -72,13 +72,15 @@ pub fn parse_args() -> ArgMatches {
                 .short('z')
                 .long("gzip")
                 .help("Gzip-compress stdout (file output is gzip by default)")
+                .conflicts_with("no-gzip")
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(
             Arg::new("compression-level")
                 .long("compression-level")
                 .value_name("0-9")
-                .help("Gzip level for output (default: 6)")
+                .help("Gzip level when output is compressed (default: 6)")
+                .conflicts_with("no-gzip")
                 .value_parser(clap::value_parser!(u8).range(0..=9))
                 .num_args(1),
         )
@@ -86,6 +88,7 @@ pub fn parse_args() -> ArgMatches {
             Arg::new("no-gzip")
                 .long("no-gzip")
                 .help("Disable gzip for file output")
+                .conflicts_with_all(["gzip", "compression-level"])
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(

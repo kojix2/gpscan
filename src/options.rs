@@ -144,6 +144,7 @@ mod tests {
                 Arg::new("compression-level")
                     .long("compression-level")
                     .value_name("0-9")
+                    .conflicts_with("no-gzip")
                     .value_parser(clap::value_parser!(u8).range(0..=9))
                     .num_args(1),
             )
@@ -171,11 +172,13 @@ mod tests {
                 Arg::new("gzip")
                     .short('z')
                     .long("gzip")
+                    .conflicts_with("no-gzip")
                     .action(clap::ArgAction::SetTrue),
             )
             .arg(
                 Arg::new("no-gzip")
                     .long("no-gzip")
+                    .conflicts_with_all(["gzip", "compression-level"])
                     .action(clap::ArgAction::SetTrue),
             )
             .arg(
@@ -327,6 +330,33 @@ mod tests {
         assert_eq!(options.compression_type, CompressionType::Gzip);
         assert_eq!(options.output_filename, None);
         assert_eq!(options.compression_level, 6);
+    }
+
+    #[test]
+    fn test_gzip_and_no_gzip_conflict() {
+        let app = create_test_command();
+
+        let result = app
+            .clone()
+            .try_get_matches_from(vec!["test", "--gzip", "--no-gzip"]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_compression_level_and_no_gzip_conflict() {
+        let app = create_test_command();
+
+        let result = app.clone().try_get_matches_from(vec![
+            "test",
+            "--output",
+            "foo",
+            "--no-gzip",
+            "--compression-level",
+            "9",
+        ]);
+
+        assert!(result.is_err());
     }
 
     #[test]

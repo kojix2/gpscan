@@ -64,7 +64,7 @@ Notes:
   -E, --empty-folders            Include empty folders in scan
   -q, --quiet                    Suppress all informational messages
   -z, --gzip                     Gzip-compress stdout (file output is gzip by default)
-      --compression-level <0-9>  Gzip level for output (default: 6)
+      --compression-level <0-9>  Gzip level when output is compressed (default: 6)
       --no-gzip                  Disable gzip for file output
   -f, --force                    Overwrite output file without prompt
   -h, --help                     Print help

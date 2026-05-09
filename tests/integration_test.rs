@@ -366,6 +366,39 @@ fn test_gpscan_invalid_output_path() {
 }
 
 #[test]
+fn test_gzip_and_no_gzip_conflict() {
+    let temp_dir = create_simple_test_directory("gpscan_gzip_conflict", "test content", "");
+    let dir_path = temp_dir.path();
+
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
+    cmd.arg(dir_path.to_str().unwrap())
+        .arg("--gzip")
+        .arg("--no-gzip");
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
+}
+
+#[test]
+fn test_compression_level_and_no_gzip_conflict() {
+    let temp_dir = create_simple_test_directory("gpscan_level_conflict", "test content", "");
+    let dir_path = temp_dir.path();
+
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
+    cmd.arg(dir_path.to_str().unwrap())
+        .arg("-o")
+        .arg("result")
+        .arg("--no-gzip")
+        .arg("--compression-level")
+        .arg("9");
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
+}
+
+#[test]
 fn test_gpscan_with_gzip_compression() {
     let temp_dir = create_simple_test_directory(
         "gpscan_gzip_test",
