@@ -16,12 +16,10 @@ jobs:
           - windows
     steps:
       - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-hack
-      - name: Set up nightly toolchain (Windows)
-        if: matrix.os == 'windows'
-        run: rustup update nightly && rustup default nightly
       - name: Build project
         run: cargo build --verbose
       - name: Run tests
