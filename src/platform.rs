@@ -53,12 +53,21 @@ impl MetadataExtOps for Metadata {
 #[cfg(target_os = "windows")]
 impl MetadataExtOps for Metadata {
     fn device_id(&self) -> u64 {
-        self.volume_serial_number().unwrap_or(0) as u64
+        // NOTE: Previously used `volume_serial_number()` from unstable `windows_by_handle` feature.
+        // To maintain compatibility with Rust stable, we return 0 as a placeholder.
+        // This method is currently unused in the codebase (dead code).
+        // If `windows_by_handle` is stabilized in the future, we can restore the actual implementation:
+        //   self.volume_serial_number().unwrap_or(0) as u64
+        0
     }
 
     fn inode_number(&self) -> u64 {
-        // Windows does not have inode, so use file index
-        self.file_index().unwrap_or(0)
+        // NOTE: Previously used `file_index()` from unstable `windows_by_handle` feature.
+        // To maintain compatibility with Rust stable, we return 0 as a placeholder.
+        // This method is currently unused in the codebase (dead code).
+        // If `windows_by_handle` is stabilized in the future, we can restore the actual implementation:
+        //   self.file_index().unwrap_or(0)
+        0
     }
 
     fn file_size(&self, apparent: bool) -> u64 {
