@@ -166,17 +166,20 @@ pub fn process_file_entry<W: Write>(
     visited_inodes: &mut HashSet<(u64, u64)>,
     writer: &mut Writer<W>,
 ) -> io::Result<()> {
-    // Build hard-link identity by filesystem + inode
+    // Build hard-link identity by filesystem + inode. Some platforms may report
+    // (0, 0) when a stable file identity is unavailable; do not deduplicate on
+    // that placeholder or every file would look like the same hard link.
     let file_key = (metadata.device_id(), metadata.inode_number());
+    if file_key != (0, 0) {
+        // Skip if the file is a hard link
+        if visited_inodes.contains(&file_key) {
+            info!("Skipping hard link file: {}", path.display());
+            return Ok(());
+        }
 
-    // Skip if the file is a hard link
-    if visited_inodes.contains(&file_key) {
-        info!("Skipping hard link file: {}", path.display());
-        return Ok(());
+        // Add inode number to the set of visited inodes
+        visited_inodes.insert(file_key);
     }
-
-    // Add inode number to the set of visited inodes
-    visited_inodes.insert(file_key);
 
     // Get file name
     let name = path
