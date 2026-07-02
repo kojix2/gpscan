@@ -62,13 +62,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     // Get volume information
     let (volume_path, volume_size, free_space) = get_volume_info(&root_path_abs, &disks);
     let volume_root = Path::new(&volume_path);
-    let root_label = match root_path_abs.strip_prefix(volume_root) {
-        Ok(rel) => rel
-            .to_string_lossy()
-            .trim_start_matches(std::path::MAIN_SEPARATOR)
-            .to_string(),
-        Err(_) => root_path_abs.display().to_string(),
-    };
+    let root_label = root_label_for(&root_path_abs, volume_root);
 
     // Create a write handle with compression support
     let (handle, output_path_to_skip): (Box<dyn Write>, Option<PathBuf>) = match &option
@@ -191,4 +185,111 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
         .map_err(io::Error::other)?;
 
     Ok(())
+}
+
+fn root_label_for(root_path_abs: &Path, volume_root: &Path) -> String {
+    if let Ok(rel) = root_path_abs.strip_prefix(volume_root) {
+        let label = rel
+            .to_string_lossy()
+            .trim_start_matches(std::path::MAIN_SEPARATOR)
+            .to_string();
+
+        if !label.is_empty() {
+            return label;
+        }
+
+        return path_display_name(root_path_abs);
+    }
+
+    root_path_abs.display().to_string()
+}
+
+fn path_display_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| path.display().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_root_label_uses_relative_path_under_volume_root() {
+        let root_path = Path::new("/Users/example/project");
+        let volume_root = Path::new("/");
+
+        assert_eq!(
+            root_label_for(root_path, volume_root),
+            "Users/example/project"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_root_label_uses_relative_path_under_volume_root() {
+        let root_path = Path::new(r"C:\Users\example\project");
+        let volume_root = Path::new(r"C:\");
+
+        assert_eq!(
+            root_label_for(root_path, volume_root),
+            r"Users\example\project"
+        );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_root_label_uses_mount_point_name_for_volume_root() {
+        let root_path = Path::new("/Volumes/Data");
+        let volume_root = Path::new("/Volumes/Data");
+
+        assert_eq!(root_label_for(root_path, volume_root), "Data");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_root_label_uses_mount_point_name_for_volume_root() {
+        let root_path = Path::new(r"C:\Data");
+        let volume_root = Path::new(r"C:\Data");
+
+        assert_eq!(root_label_for(root_path, volume_root), "Data");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_root_label_uses_root_path_for_filesystem_root() {
+        let root_path = Path::new("/");
+        let volume_root = Path::new("/");
+
+        assert_eq!(root_label_for(root_path, volume_root), "/");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_root_label_uses_root_path_for_filesystem_root() {
+        let root_path = Path::new(r"C:\");
+        let volume_root = Path::new(r"C:\");
+
+        assert_eq!(root_label_for(root_path, volume_root), r"C:\");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_root_label_falls_back_to_absolute_path_outside_volume_root() {
+        let root_path = Path::new("/other/path");
+        let volume_root = Path::new("/Volumes/Data");
+
+        assert_eq!(root_label_for(root_path, volume_root), "/other/path");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_root_label_falls_back_to_absolute_path_outside_volume_root() {
+        let root_path = Path::new(r"D:\other\path");
+        let volume_root = Path::new(r"C:\Data");
+
+        assert_eq!(root_label_for(root_path, volume_root), r"D:\other\path");
+    }
 }
