@@ -51,6 +51,15 @@ pub fn file_identity(path: &Path, metadata: &Metadata) -> io::Result<Option<Path
     path_identity(path, metadata)
 }
 
+pub fn path_device_id(path: &Path, metadata: &Metadata) -> io::Result<Option<u64>> {
+    Ok(path_identity(path, metadata)?
+        .map(|(device_id, _)| device_id)
+        .or_else(|| {
+            let device_id = metadata.device_id();
+            (device_id != 0).then_some(device_id)
+        }))
+}
+
 #[cfg(target_os = "linux")]
 impl MetadataExtOps for Metadata {
     fn device_id(&self) -> u64 {

@@ -15,7 +15,7 @@ use crate::xml_output::{get_file_times, sanitize_for_xml, TAG_FILE, TAG_FOLDER};
 
 pub(crate) struct TraversalConfig<'a> {
     pub(crate) root_label: &'a str,
-    pub(crate) root_dev: u64,
+    pub(crate) root_dev: Option<u64>,
     pub(crate) options: &'a Options,
     pub(crate) output_path_to_skip: Option<&'a Path>,
 }
@@ -32,7 +32,7 @@ pub fn traverse_directory_to_xml<W: Write>(
 ) -> io::Result<()> {
     let config = TraversalConfig {
         root_label,
-        root_dev,
+        root_dev: (root_dev != 0).then_some(root_dev),
         options,
         output_path_to_skip: None,
     };
@@ -80,31 +80,43 @@ fn traverse_directory_to_xml_impl<W: Write>(
         }
     };
 
+    let dir_identity = match path_identity(path, &metadata) {
+        Ok(identity) => identity,
+        Err(e) => {
+            warn!("Failed to identify directory '{}': {}", path.display(), e);
+            None
+        }
+    };
+    let current_dev = dir_identity
+        .map(|(dev, _)| dev)
+        .or_else(|| nonzero_device_id(&metadata));
+
     // Check if the current directory is on a different filesystem
     if !config.options.cross_mount_points {
-        let current_dev = metadata.device_id();
-
-        if current_dev != config.root_dev {
+        if let (Some(root_dev), Some(current_dev)) = (config.root_dev, current_dev) {
+            if current_dev != root_dev {
+                info!(
+                    "Skipping directory on different filesystem: {} (root: {}, current: {})",
+                    path.display(),
+                    root_dev,
+                    current_dev
+                );
+                return Ok(false);
+            }
+        } else {
             info!(
-                "Skipping directory on different filesystem: {} (root: {}, current: {})",
+                "Cannot determine filesystem boundary for directory: {}",
                 path.display(),
-                config.root_dev,
-                current_dev
             );
-            return Ok(false);
         }
     }
 
-    match path_identity(path, &metadata) {
-        Ok(Some(dir_key)) => {
-            if visited_dirs.contains(&dir_key) {
-                info!("Skipping already visited directory: {}", path.display());
-                return Ok(false);
-            }
-            visited_dirs.insert(dir_key);
+    if let Some(dir_key) = dir_identity {
+        if visited_dirs.contains(&dir_key) {
+            info!("Skipping already visited directory: {}", path.display());
+            return Ok(false);
         }
-        Ok(None) => {}
-        Err(e) => warn!("Failed to identify directory '{}': {}", path.display(), e),
+        visited_dirs.insert(dir_key);
     }
 
     // Get file times
@@ -307,6 +319,11 @@ fn should_skip_output_file(path: &Path, output_path_to_skip: Option<&Path>) -> b
         .unwrap_or(false)
 }
 
+fn nonzero_device_id(metadata: &Metadata) -> Option<u64> {
+    let device_id = metadata.device_id();
+    (device_id != 0).then_some(device_id)
+}
+
 /// Reads the contents of a directory and returns a vector of directory entries.
 /// Set `log_error` to false when the caller will handle and report the error itself.
 pub fn read_directory(path: &Path) -> io::Result<Vec<fs::DirEntry>> {
@@ -372,7 +389,7 @@ mod tests {
         let metadata = fs::metadata(root_path).expect("Failed to read root metadata");
         let config = TraversalConfig {
             root_label: "gpscan_visited_dir",
-            root_dev: metadata.device_id(),
+            root_dev: nonzero_device_id(&metadata),
             options: &options,
             output_path_to_skip: None,
         };

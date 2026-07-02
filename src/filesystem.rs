@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use crate::compression::create_compressed_writer_with_level;
 use crate::options::Options;
-use crate::platform::MetadataExtOps;
+use crate::platform::path_device_id;
 use crate::scan::{traverse_directory_to_xml_with_config, TraversalConfig};
 use crate::volume::get_volume_info;
 use crate::xml_output::{
@@ -54,7 +54,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
 
     // Get the device ID of the root directory
     let root_metadata = fs::metadata(&root_path_abs)?;
-    let root_dev = root_metadata.device_id();
+    let root_dev = path_device_id(&root_path_abs, &root_metadata)?;
 
     // Create Disks instance and refresh disk list
     let disks = Disks::new_with_refreshed_list();
