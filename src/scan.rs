@@ -232,16 +232,19 @@ fn process_file_entry_impl<W: Write>(
         return Ok(false);
     }
 
-    // Build hard-link identity by filesystem + inode/file index.
-    if let Some(file_key) = file_identity(path, metadata)? {
-        // Skip if the file is a hard link
-        if visited_inodes.contains(&file_key) {
-            info!("Skipping hard link file: {}", path.display());
-            return Ok(false);
-        }
+    // Physical size mode avoids counting the same disk blocks multiple times.
+    // Apparent size mode represents the logical path tree, so every hard link path is emitted.
+    if !options.apparent_size {
+        if let Some(file_key) = file_identity(path, metadata)? {
+            // Skip if the file is a hard link
+            if visited_inodes.contains(&file_key) {
+                info!("Skipping hard link file: {}", path.display());
+                return Ok(false);
+            }
 
-        // Add inode number to the set of visited inodes
-        visited_inodes.insert(file_key);
+            // Add inode number to the set of visited inodes
+            visited_inodes.insert(file_key);
+        }
     }
 
     // Get file name

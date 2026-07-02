@@ -249,6 +249,7 @@ fn test_gpscan_output() {
         xml_output_logical.contains("fileSizeMeasure=\"logical\""),
         "Expected logical measure when --apparent-size is set"
     );
+    assert_file_in_xml(&xml_output_logical, "hardlink_to_file2", true);
 }
 
 #[test]
