@@ -17,6 +17,7 @@ impl Options {
         let output_file = matches.get_one::<String>("output");
         let no_gzip = matches.get_flag("no-gzip");
         let gzip_flag = matches.get_flag("gzip");
+        let compression_level_set = matches.get_one::<u8>("compression-level").is_some();
         let level = *matches.get_one::<u8>("compression-level").unwrap_or(&6u8);
         let force_overwrite = matches.get_flag("force");
 
@@ -33,8 +34,8 @@ impl Options {
                 (compression, Some(final_filename))
             }
             None => {
-                // Stdout: default to no compression unless --gzip is specified
-                let compression = if gzip_flag {
+                // Stdout: default to no compression unless --gzip or --compression-level is specified
+                let compression = if gzip_flag || compression_level_set {
                     CompressionType::Gzip
                 } else {
                     CompressionType::None
@@ -330,6 +331,20 @@ mod tests {
         assert_eq!(options.compression_type, CompressionType::Gzip);
         assert_eq!(options.output_filename, None);
         assert_eq!(options.compression_level, 6);
+    }
+
+    #[test]
+    fn test_stdout_with_compression_level_implies_gzip() {
+        let app = create_test_command();
+
+        let matches = app
+            .clone()
+            .try_get_matches_from(vec!["test", "--compression-level", "9"])
+            .unwrap();
+        let options = Options::from_matches(&matches);
+        assert_eq!(options.compression_type, CompressionType::Gzip);
+        assert_eq!(options.output_filename, None);
+        assert_eq!(options.compression_level, 9);
     }
 
     #[test]

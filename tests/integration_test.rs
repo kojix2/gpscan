@@ -445,6 +445,22 @@ fn test_compression_level_and_no_gzip_conflict() {
 }
 
 #[test]
+fn test_stdout_compression_level_implies_gzip() {
+    let temp_dir = create_simple_test_directory("gpscan_stdout_level", "test content", "");
+    let dir_path = temp_dir.path();
+
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
+    cmd.arg(dir_path.to_str().unwrap())
+        .arg("--compression-level")
+        .arg("9");
+    let stdout_bytes = cmd.assert().success().get_output().stdout.clone();
+
+    assert!(!stdout_bytes.is_empty(), "No output received");
+    assert_eq!(stdout_bytes[0], 0x1f, "First byte should be 0x1f for gzip");
+    assert_eq!(stdout_bytes[1], 0x8b, "Second byte should be 0x8b for gzip");
+}
+
+#[test]
 fn test_gpscan_with_gzip_compression() {
     let temp_dir = create_simple_test_directory(
         "gpscan_gzip_test",
