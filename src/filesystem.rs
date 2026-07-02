@@ -8,13 +8,13 @@ use sysinfo::Disks;
 
 // Standard library imports
 use std::collections::HashSet;
-use std::fs;
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
-use crate::compression::create_compressed_writer_with_level;
+use crate::compression::create_finishable_writer_with_level;
 use crate::options::Options;
-use crate::platform::path_device_id;
+use crate::platform::{path_device_id, replace_file};
 use crate::scan::{traverse_directory_to_xml_with_config, TraversalConfig};
 use crate::volume::get_volume_info;
 use crate::xml_output::{
@@ -64,68 +64,14 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     let volume_root = Path::new(&volume_path);
     let root_label = root_label_for(&root_path_abs, volume_root);
 
-    // Create a write handle with compression support
-    let (handle, output_path_to_skip): (Box<dyn Write>, Option<PathBuf>) = match &option
-        .output_filename
-    {
-        Some(filename) => {
-            // Validate that the provided output is not a directory-like path
-            // Note: We only check obvious cases (ends_with separator or path exists and is dir)
-            let path = Path::new(filename);
-            if path.as_os_str().is_empty()
-                || path.to_string_lossy().ends_with(std::path::MAIN_SEPARATOR)
-            {
-                let msg = format!("Output path looks like a directory: {}", filename);
-                error!("{}", msg);
-                return Err(io::Error::new(io::ErrorKind::InvalidInput, msg));
-            }
-            if path.exists() && path.is_dir() {
-                let msg = format!("Output path is a directory: {}", filename);
-                error!("{}", msg);
-                return Err(io::Error::new(io::ErrorKind::InvalidInput, msg));
-            }
-            // Overwrite confirmation when file exists
-            if path.exists() && path.is_file() && !option.force_overwrite {
-                let stdout_is_tty = io::stdout().is_terminal();
-                let stdin_is_tty = io::stdin().is_terminal();
-                if stdout_is_tty && stdin_is_tty {
-                    eprint!("[gpscan] [WARN] '{}' exists. Overwrite? [y/N]: ", filename);
-                    io::stderr().flush().ok();
-                    let mut buf = String::new();
-                    io::stdin().read_line(&mut buf).ok();
-                    let ans = buf.trim().to_lowercase();
-                    if ans != "y" && ans != "yes" {
-                        let msg = "Operation cancelled by user".to_string();
-                        error!("{}", msg);
-                        return Err(io::Error::other(msg));
-                    }
-                } else {
-                    let msg = format!(
-                        "Refusing to overwrite existing file without --force in non-interactive mode: {}",
-                        filename
-                    );
-                    error!("{}", msg);
-                    return Err(io::Error::other(msg));
-                }
-            }
-            let file = fs::File::create(filename)?;
-            let output_path_to_skip = fs::canonicalize(filename).ok();
-            let handle = create_compressed_writer_with_level(
-                file,
-                option.compression_type,
-                option.compression_level,
-            )?;
-            (handle, output_path_to_skip)
-        }
-        None => (
-            create_compressed_writer_with_level(
-                io::stdout(),
-                option.compression_type,
-                option.compression_level,
-            )?,
-            None,
-        ),
-    };
+    let prepared_output = prepare_output(&option)?;
+    let output_paths_to_skip = prepared_output.paths_to_skip.clone();
+    let mut output_destination = prepared_output.destination;
+    let handle = create_finishable_writer_with_level(
+        prepared_output.handle,
+        option.compression_type,
+        option.compression_level,
+    );
 
     let mut writer = Writer::new_with_indent(handle, b' ', 0);
 
@@ -159,7 +105,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
         root_label: &root_label,
         root_dev,
         options: &option,
-        output_path_to_skip: output_path_to_skip.as_deref(),
+        output_paths_to_skip: &output_paths_to_skip,
     };
 
     traverse_directory_to_xml_with_config(
@@ -186,7 +132,191 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
         .write_all(b"\n")
         .map_err(io::Error::other)?;
 
+    let handle = writer.into_inner();
+    let mut raw_handle = handle.finish()?;
+    raw_handle.flush()?;
+    drop(raw_handle);
+    output_destination.commit()?;
+
     Ok(())
+}
+
+struct PreparedOutput {
+    handle: Box<dyn Write>,
+    destination: OutputDestination,
+    paths_to_skip: Vec<PathBuf>,
+}
+
+enum OutputDestination {
+    Stdout,
+    AtomicFile(AtomicFileOutput),
+}
+
+impl OutputDestination {
+    fn commit(&mut self) -> io::Result<()> {
+        match self {
+            OutputDestination::Stdout => Ok(()),
+            OutputDestination::AtomicFile(output) => output.commit(),
+        }
+    }
+}
+
+struct AtomicFileOutput {
+    target_path: PathBuf,
+    temp_path: PathBuf,
+    committed: bool,
+}
+
+impl AtomicFileOutput {
+    fn commit(&mut self) -> io::Result<()> {
+        replace_file(&self.temp_path, &self.target_path)?;
+        self.committed = true;
+        Ok(())
+    }
+}
+
+impl Drop for AtomicFileOutput {
+    fn drop(&mut self) {
+        if !self.committed {
+            let _ = fs::remove_file(&self.temp_path);
+        }
+    }
+}
+
+fn prepare_output(option: &Options) -> io::Result<PreparedOutput> {
+    match &option.output_filename {
+        Some(filename) => prepare_file_output(filename, option),
+        None => Ok(PreparedOutput {
+            handle: Box::new(io::stdout()),
+            destination: OutputDestination::Stdout,
+            paths_to_skip: Vec::new(),
+        }),
+    }
+}
+
+fn prepare_file_output(filename: &str, option: &Options) -> io::Result<PreparedOutput> {
+    let target_path = Path::new(filename);
+    validate_output_target(target_path, filename, option.force_overwrite)?;
+
+    let mut paths_to_skip = Vec::new();
+    if let Ok(path) = fs::canonicalize(target_path) {
+        paths_to_skip.push(path);
+    }
+
+    let (file, temp_path) = create_temp_output_file(target_path)?;
+    if let Ok(path) = fs::canonicalize(&temp_path) {
+        paths_to_skip.push(path);
+    }
+
+    Ok(PreparedOutput {
+        handle: Box::new(file),
+        destination: OutputDestination::AtomicFile(AtomicFileOutput {
+            target_path: target_path.to_path_buf(),
+            temp_path,
+            committed: false,
+        }),
+        paths_to_skip,
+    })
+}
+
+fn validate_output_target(path: &Path, filename: &str, force_overwrite: bool) -> io::Result<()> {
+    if path.as_os_str().is_empty() || path.to_string_lossy().ends_with(std::path::MAIN_SEPARATOR) {
+        let msg = format!("Output path looks like a directory: {}", filename);
+        error!("{}", msg);
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, msg));
+    }
+
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            let file_type = metadata.file_type();
+            if file_type.is_symlink() {
+                let msg = format!(
+                    "Refusing to write output through symbolic link: {}",
+                    filename
+                );
+                error!("{}", msg);
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, msg));
+            }
+            if file_type.is_dir() {
+                let msg = format!("Output path is a directory: {}", filename);
+                error!("{}", msg);
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, msg));
+            }
+            if !file_type.is_file() {
+                let msg = format!("Output path is not a regular file: {}", filename);
+                error!("{}", msg);
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, msg));
+            }
+            confirm_overwrite_if_needed(filename, force_overwrite)?;
+        }
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e),
+    }
+
+    Ok(())
+}
+
+fn confirm_overwrite_if_needed(filename: &str, force_overwrite: bool) -> io::Result<()> {
+    if force_overwrite {
+        return Ok(());
+    }
+
+    let stdout_is_tty = io::stdout().is_terminal();
+    let stdin_is_tty = io::stdin().is_terminal();
+    if stdout_is_tty && stdin_is_tty {
+        eprint!("[gpscan] [WARN] '{}' exists. Overwrite? [y/N]: ", filename);
+        io::stderr().flush().ok();
+        let mut buf = String::new();
+        io::stdin().read_line(&mut buf).ok();
+        let ans = buf.trim().to_lowercase();
+        if ans == "y" || ans == "yes" {
+            return Ok(());
+        }
+
+        let msg = "Operation cancelled by user".to_string();
+        error!("{}", msg);
+        Err(io::Error::other(msg))
+    } else {
+        let msg = format!(
+            "Refusing to overwrite existing file without --force in non-interactive mode: {}",
+            filename
+        );
+        error!("{}", msg);
+        Err(io::Error::other(msg))
+    }
+}
+
+fn create_temp_output_file(target_path: &Path) -> io::Result<(File, PathBuf)> {
+    let parent = target_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let file_name = target_path
+        .file_name()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Output path has no file name"))?
+        .to_string_lossy();
+    let pid = std::process::id();
+
+    for attempt in 0..100 {
+        let temp_path = parent.join(format!(".{}.tmp.{}.{}", file_name, pid, attempt));
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)
+        {
+            Ok(file) => return Ok((file, temp_path)),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        format!(
+            "Could not create a unique temporary output file for {}",
+            target_path.display()
+        ),
+    ))
 }
 
 fn root_label_for(root_path_abs: &Path, volume_root: &Path) -> String {

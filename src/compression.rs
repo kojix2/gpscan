@@ -11,6 +11,55 @@ pub enum CompressionType {
 
 impl CompressionType {}
 
+pub enum FinishableWriter<W: Write> {
+    None(W),
+    Gzip(GzEncoder<W>),
+}
+
+impl<W: Write> FinishableWriter<W> {
+    pub fn finish(mut self) -> io::Result<W> {
+        match &mut self {
+            FinishableWriter::None(writer) => writer.flush()?,
+            FinishableWriter::Gzip(writer) => writer.try_finish()?,
+        }
+
+        match self {
+            FinishableWriter::None(writer) => Ok(writer),
+            FinishableWriter::Gzip(writer) => writer.finish(),
+        }
+    }
+}
+
+impl<W: Write> Write for FinishableWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match self {
+            FinishableWriter::None(writer) => writer.write(buf),
+            FinishableWriter::Gzip(writer) => writer.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            FinishableWriter::None(writer) => writer.flush(),
+            FinishableWriter::Gzip(writer) => writer.flush(),
+        }
+    }
+}
+
+pub fn create_finishable_writer_with_level<W: Write>(
+    writer: W,
+    compression_type: CompressionType,
+    level: u8,
+) -> FinishableWriter<W> {
+    match compression_type {
+        CompressionType::None => FinishableWriter::None(writer),
+        CompressionType::Gzip => {
+            let lvl = if level > 9 { 9 } else { level };
+            FinishableWriter::Gzip(GzEncoder::new(writer, GzipCompression::new(lvl as u32)))
+        }
+    }
+}
+
 /// Factory function to create compressed writers
 pub fn create_compressed_writer<W: Write + 'static>(
     writer: W,
@@ -26,14 +75,11 @@ pub fn create_compressed_writer_with_level<W: Write + 'static>(
     compression_type: CompressionType,
     level: u8,
 ) -> io::Result<Box<dyn Write>> {
-    match compression_type {
-        CompressionType::None => Ok(Box::new(writer)),
-        CompressionType::Gzip => {
-            let lvl = if level > 9 { 9 } else { level };
-            let encoder = GzEncoder::new(writer, GzipCompression::new(lvl as u32));
-            Ok(Box::new(encoder))
-        }
-    }
+    Ok(Box::new(create_finishable_writer_with_level(
+        writer,
+        compression_type,
+        level,
+    )))
 }
 
 #[cfg(test)]

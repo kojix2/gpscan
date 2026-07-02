@@ -60,6 +60,29 @@ pub fn path_device_id(path: &Path, metadata: &Metadata) -> io::Result<Option<u64
         }))
 }
 
+#[cfg(not(target_os = "windows"))]
+pub fn replace_file(from: &Path, to: &Path) -> io::Result<()> {
+    std::fs::rename(from, to)
+}
+
+#[cfg(target_os = "windows")]
+pub fn replace_file(from: &Path, to: &Path) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_REPLACE_EXISTING};
+
+    fn wide_null(path: &Path) -> Vec<u16> {
+        path.as_os_str().encode_wide().chain(Some(0)).collect()
+    }
+
+    let from = wide_null(from);
+    let to = wide_null(to);
+    let ok = unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), MOVEFILE_REPLACE_EXISTING) };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
 #[cfg(target_os = "linux")]
 impl MetadataExtOps for Metadata {
     fn device_id(&self) -> u64 {

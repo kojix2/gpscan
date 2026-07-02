@@ -383,7 +383,44 @@ fn test_gpscan_skips_output_file_inside_scanned_directory() {
         fs::read_to_string(&expected_output_file_path).expect("Failed to read output file");
     assert_file_in_xml(&content, "file1.txt", true);
     assert_file_in_xml(&content, "result.gpscan", false);
+    assert!(
+        !content.contains(".result.gpscan.tmp."),
+        "XML should not include the temporary output file"
+    );
     assert_xml_structure(&content);
+}
+
+#[cfg(not(target_os = "windows"))]
+#[test]
+fn test_gpscan_refuses_symlink_output_without_truncating_target() {
+    let temp_dir = create_simple_test_directory("gpscan_symlink_output", "test content", "");
+    let dir_path = temp_dir.path();
+    let target_path = dir_path.join("target.txt");
+    let symlink_path = dir_path.join("linked-output.gpscan");
+
+    fs::write(&target_path, "keep this content").expect("Failed to write symlink target");
+    create_file_symlink(&target_path, &symlink_path).expect("Failed to create output symlink");
+
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gpscan");
+    cmd.arg(dir_path.to_str().unwrap())
+        .arg("-o")
+        .arg(symlink_path.to_str().unwrap())
+        .arg("--force");
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("symbolic link"));
+    assert_eq!(
+        fs::read_to_string(&target_path).expect("Failed to read symlink target"),
+        "keep this content"
+    );
+    assert!(
+        fs::symlink_metadata(&symlink_path)
+            .expect("Failed to stat output symlink")
+            .file_type()
+            .is_symlink(),
+        "Output symlink should not be replaced"
+    );
 }
 
 #[test]

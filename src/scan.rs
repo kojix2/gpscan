@@ -7,7 +7,7 @@ use quick_xml::writer::Writer;
 use std::collections::HashSet;
 use std::fs::{self, Metadata};
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::options::Options;
 use crate::platform::{file_identity, path_identity, MetadataExtOps};
@@ -17,7 +17,7 @@ pub(crate) struct TraversalConfig<'a> {
     pub(crate) root_label: &'a str,
     pub(crate) root_dev: Option<u64>,
     pub(crate) options: &'a Options,
-    pub(crate) output_path_to_skip: Option<&'a Path>,
+    pub(crate) output_paths_to_skip: &'a [PathBuf],
 }
 
 /// Recursively traverses the directory and outputs XML.
@@ -34,7 +34,7 @@ pub fn traverse_directory_to_xml<W: Write>(
         root_label,
         root_dev: (root_dev != 0).then_some(root_dev),
         options,
-        output_path_to_skip: None,
+        output_paths_to_skip: &[],
     };
 
     let mut visited_dirs = HashSet::new();
@@ -188,7 +188,7 @@ fn traverse_directory_to_xml_impl<W: Write>(
 
         // Files first
         for (entry_path, entry_metadata) in file_entries {
-            if should_skip_output_file(&entry_path, config.output_path_to_skip) {
+            if should_skip_output_file(&entry_path, config.output_paths_to_skip) {
                 info!("Skipping output file: {}", entry_path.display());
                 continue;
             }
@@ -309,14 +309,12 @@ fn process_file_entry_impl<W: Write>(
     Ok(true)
 }
 
-fn should_skip_output_file(path: &Path, output_path_to_skip: Option<&Path>) -> bool {
-    output_path_to_skip
-        .and_then(|output_path_to_skip| {
-            fs::canonicalize(path)
-                .ok()
-                .map(|canonical_path| canonical_path == output_path_to_skip)
-        })
-        .unwrap_or(false)
+fn should_skip_output_file(path: &Path, output_paths_to_skip: &[PathBuf]) -> bool {
+    fs::canonicalize(path).ok().is_some_and(|canonical_path| {
+        output_paths_to_skip
+            .iter()
+            .any(|output_path_to_skip| canonical_path == *output_path_to_skip)
+    })
 }
 
 fn nonzero_device_id(metadata: &Metadata) -> Option<u64> {
@@ -391,7 +389,7 @@ mod tests {
             root_label: "gpscan_visited_dir",
             root_dev: nonzero_device_id(&metadata),
             options: &options,
-            output_path_to_skip: None,
+            output_paths_to_skip: &[],
         };
         let mut visited_inodes = HashSet::new();
         let mut visited_dirs = HashSet::new();
