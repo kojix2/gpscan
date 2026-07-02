@@ -364,11 +364,9 @@ fn start_pending_folders<W: Write>(
 }
 
 fn should_skip_output_file(path: &Path, output_paths_to_skip: &[PathBuf]) -> bool {
-    fs::canonicalize(path).ok().is_some_and(|canonical_path| {
-        output_paths_to_skip
-            .iter()
-            .any(|output_path_to_skip| canonical_path == *output_path_to_skip)
-    })
+    fs::canonicalize(path)
+        .ok()
+        .is_some_and(|canonical_path| output_paths_to_skip.contains(&canonical_path))
 }
 
 fn nonzero_device_id(metadata: &Metadata) -> Option<u64> {
