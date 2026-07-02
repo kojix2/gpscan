@@ -290,7 +290,20 @@ pub fn read_directory(path: &Path) -> io::Result<Vec<fs::DirEntry>> {
 
 fn read_directory_impl(path: &Path, log_error: bool) -> io::Result<Vec<fs::DirEntry>> {
     match fs::read_dir(path) {
-        Ok(read_dir) => read_dir.collect::<Result<Vec<_>, io::Error>>(),
+        Ok(read_dir) => {
+            let mut entries = Vec::new();
+            for entry in read_dir {
+                match entry {
+                    Ok(entry) => entries.push(entry),
+                    Err(e) => warn!(
+                        "Failed to read directory entry in '{}': {}",
+                        path.display(),
+                        e
+                    ),
+                }
+            }
+            Ok(entries)
+        }
         Err(e) => {
             if log_error {
                 error!("Failed to read directory '{}': {}", path.display(), e);
