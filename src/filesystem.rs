@@ -152,6 +152,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
 
     // Create a set to store visited inodes
     let mut visited_inodes = HashSet::new();
+    let mut visited_dirs = HashSet::new();
 
     // Start traversing the directory with new options
     let traversal_config = TraversalConfig {
@@ -166,6 +167,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
         true,
         &traversal_config,
         &mut visited_inodes,
+        &mut visited_dirs,
         &mut writer,
     )?;
 

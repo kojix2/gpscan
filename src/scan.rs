@@ -10,7 +10,7 @@ use std::io::{self, Write};
 use std::path::Path;
 
 use crate::options::Options;
-use crate::platform::{file_identity, MetadataExtOps};
+use crate::platform::{file_identity, path_identity, MetadataExtOps};
 use crate::xml_output::{get_file_times, sanitize_for_xml, TAG_FILE, TAG_FOLDER};
 
 pub(crate) struct TraversalConfig<'a> {
@@ -37,7 +37,16 @@ pub fn traverse_directory_to_xml<W: Write>(
         output_path_to_skip: None,
     };
 
-    traverse_directory_to_xml_impl(path, is_root, &config, visited_inodes, writer).map(|_| ())
+    let mut visited_dirs = HashSet::new();
+    traverse_directory_to_xml_impl(
+        path,
+        is_root,
+        &config,
+        visited_inodes,
+        &mut visited_dirs,
+        writer,
+    )
+    .map(|_| ())
 }
 
 pub(crate) fn traverse_directory_to_xml_with_config<W: Write>(
@@ -45,9 +54,11 @@ pub(crate) fn traverse_directory_to_xml_with_config<W: Write>(
     is_root: bool,
     config: &TraversalConfig<'_>,
     visited_inodes: &mut HashSet<(u64, u64)>,
+    visited_dirs: &mut HashSet<(u64, u64)>,
     writer: &mut Writer<W>,
 ) -> io::Result<()> {
-    traverse_directory_to_xml_impl(path, is_root, config, visited_inodes, writer).map(|_| ())
+    traverse_directory_to_xml_impl(path, is_root, config, visited_inodes, visited_dirs, writer)
+        .map(|_| ())
 }
 
 fn traverse_directory_to_xml_impl<W: Write>(
@@ -55,6 +66,7 @@ fn traverse_directory_to_xml_impl<W: Write>(
     is_root: bool,
     config: &TraversalConfig<'_>,
     visited_inodes: &mut HashSet<(u64, u64)>,
+    visited_dirs: &mut HashSet<(u64, u64)>,
     writer: &mut Writer<W>,
 ) -> io::Result<bool> {
     // Get metadata of the current directory (suppress internal log for root; main.rs will print it)
@@ -81,6 +93,18 @@ fn traverse_directory_to_xml_impl<W: Write>(
             );
             return Ok(false);
         }
+    }
+
+    match path_identity(path, &metadata) {
+        Ok(Some(dir_key)) => {
+            if visited_dirs.contains(&dir_key) {
+                info!("Skipping already visited directory: {}", path.display());
+                return Ok(false);
+            }
+            visited_dirs.insert(dir_key);
+        }
+        Ok(None) => {}
+        Err(e) => warn!("Failed to identify directory '{}': {}", path.display(), e),
     }
 
     // Get file times
@@ -174,6 +198,7 @@ fn traverse_directory_to_xml_impl<W: Write>(
                 false,
                 config,
                 visited_inodes,
+                visited_dirs,
                 &mut child_writer,
             )? {
                 has_output_children = true;
@@ -326,5 +351,63 @@ fn get_metadata_impl(path: &Path, log_error: bool) -> io::Result<Metadata> {
             }
             Err(e)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::options::Options;
+    use std::fs::File;
+    use tempdir::TempDir;
+
+    #[test]
+    fn test_traversal_skips_already_visited_directory_identity() {
+        let temp_dir = TempDir::new("gpscan_visited_dir").expect("Failed to create temp dir");
+        let root_path = temp_dir.path();
+        let mut file = File::create(root_path.join("file.txt")).expect("Failed to create file");
+        writeln!(file, "content").expect("Failed to write file");
+
+        let options = Options::default();
+        let metadata = fs::metadata(root_path).expect("Failed to read root metadata");
+        let config = TraversalConfig {
+            root_label: "gpscan_visited_dir",
+            root_dev: metadata.device_id(),
+            options: &options,
+            output_path_to_skip: None,
+        };
+        let mut visited_inodes = HashSet::new();
+        let mut visited_dirs = HashSet::new();
+        let mut first_output = Vec::new();
+        let mut first_writer = Writer::new(&mut first_output);
+
+        assert!(traverse_directory_to_xml_impl(
+            root_path,
+            true,
+            &config,
+            &mut visited_inodes,
+            &mut visited_dirs,
+            &mut first_writer,
+        )
+        .expect("First traversal failed"));
+
+        let mut second_output = Vec::new();
+        let mut second_writer = Writer::new(&mut second_output);
+        assert!(
+            !traverse_directory_to_xml_impl(
+                root_path,
+                false,
+                &config,
+                &mut visited_inodes,
+                &mut visited_dirs,
+                &mut second_writer,
+            )
+            .expect("Second traversal failed"),
+            "Expected repeat visit to the same directory identity to be skipped"
+        );
+        assert!(
+            second_output.is_empty(),
+            "Skipped directory should not emit XML"
+        );
     }
 }

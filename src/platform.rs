@@ -8,7 +8,7 @@ use std::os::unix::fs::MetadataExt;
 use std::os::windows::io::AsRawHandle;
 use std::path::Path;
 
-pub type FileIdentity = (u64, u64);
+pub type PathIdentity = (u64, u64);
 
 pub trait MetadataExtOps {
     fn device_id(&self) -> u64;
@@ -17,19 +17,25 @@ pub trait MetadataExtOps {
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn file_identity(_path: &Path, metadata: &Metadata) -> io::Result<Option<FileIdentity>> {
+pub fn path_identity(_path: &Path, metadata: &Metadata) -> io::Result<Option<PathIdentity>> {
     let identity = (metadata.device_id(), metadata.inode_number());
     Ok((identity != (0, 0)).then_some(identity))
 }
 
 #[cfg(target_os = "windows")]
-pub fn file_identity(path: &Path, _metadata: &Metadata) -> io::Result<Option<FileIdentity>> {
-    use std::fs::File;
+pub fn path_identity(path: &Path, _metadata: &Metadata) -> io::Result<Option<PathIdentity>> {
+    use std::fs::OpenOptions;
+    use std::os::windows::fs::OpenOptionsExt;
     use windows_sys::Win32::Storage::FileSystem::{
-        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, FILE_FLAG_BACKUP_SEMANTICS,
+        FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
     };
 
-    let file = File::open(path)?;
+    let file = OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path)?;
     let mut info = BY_HANDLE_FILE_INFORMATION::default();
     let ok = unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut info) };
     if ok == 0 {
@@ -39,6 +45,10 @@ pub fn file_identity(path: &Path, _metadata: &Metadata) -> io::Result<Option<Fil
     let file_index = ((info.nFileIndexHigh as u64) << 32) | info.nFileIndexLow as u64;
     let identity = (info.dwVolumeSerialNumber as u64, file_index);
     Ok((identity != (0, 0)).then_some(identity))
+}
+
+pub fn file_identity(path: &Path, metadata: &Metadata) -> io::Result<Option<PathIdentity>> {
+    path_identity(path, metadata)
 }
 
 #[cfg(target_os = "linux")]
