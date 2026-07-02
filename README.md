@@ -43,8 +43,8 @@ gpscan . -o result
 # Plain text file output (no gzip)
 gpscan . -o result --no-gzip
 
-# Gzip to stdout (useful for piping/redirect)
-gpscan . -z > result.gpscan
+# Gzip to stdout (useful for piping outside the scanned directory)
+gpscan . --gzip > /tmp/result.gpscan
 ```
 
 Then open the generated file in [GrandPerspective](https://grandperspectiv.sourceforge.net/).
@@ -52,6 +52,7 @@ Then open the generated file in [GrandPerspective](https://grandperspectiv.sourc
 Notes:
 
 - File output (-o) defaults to gzip and adds the .gpscan suffix automatically.
+- Prefer `-o` when writing output inside the scanned directory. Shell redirection creates files before gpscan starts, so redirected stdout/stderr files may be included in the scan.
 - When the target file already exists: in TTY, a prompt asks to overwrite; in non-interactive mode, use `--force`.
 
 ### Options

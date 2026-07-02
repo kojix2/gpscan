@@ -27,7 +27,7 @@ jobs:
       - name: Check CLI tool
         run: |
           cargo install --path . 
-          gpscan . 2> error.log 1> output.gpscan
+          gpscan . -o output --force 2> error.log
       - uses: actions/upload-artifact@v7
         with:
           name: scan-results-${{ matrix.os }}
