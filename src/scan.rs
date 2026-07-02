@@ -181,7 +181,7 @@ fn traverse_directory_to_xml_impl<W: Write>(
         }
     }
 
-    if !has_output_children && !config.options.include_empty_folders {
+    if !is_root && !has_output_children && !config.options.include_empty_folders {
         info!("Skipping empty folder: {}", path.display());
         return Ok(false);
     }

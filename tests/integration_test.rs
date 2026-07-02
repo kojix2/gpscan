@@ -273,6 +273,35 @@ fn test_gpscan_skips_effectively_empty_folders() {
     assert_file_in_xml(&xml_output_zero, "zero-byte.txt", true);
 }
 
+#[test]
+fn test_gpscan_preserves_empty_root_folder() {
+    let temp_dir = TempDir::new("gpscan_empty_root").expect("Failed to create temp dir");
+    let xml_output = run_gpscan(temp_dir.path(), &[]);
+
+    assert_xml_structure(&xml_output);
+    assert_eq!(
+        xml_output.matches("<Folder ").count(),
+        1,
+        "Expected empty root directory to be represented by a Folder element"
+    );
+}
+
+#[test]
+fn test_gpscan_preserves_root_folder_with_only_zero_byte_files() {
+    let temp_dir = TempDir::new("gpscan_zero_only_root").expect("Failed to create temp dir");
+    File::create(temp_dir.path().join("zero-byte.txt")).expect("Failed to create empty file");
+
+    let xml_output = run_gpscan(temp_dir.path(), &[]);
+
+    assert_xml_structure(&xml_output);
+    assert_eq!(
+        xml_output.matches("<Folder ").count(),
+        1,
+        "Expected root directory to be represented even when all files are filtered"
+    );
+    assert_file_in_xml(&xml_output, "zero-byte.txt", false);
+}
+
 #[cfg(not(target_os = "windows"))]
 #[test]
 fn test_gpscan_escapes_file_names_once() {
