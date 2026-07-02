@@ -38,12 +38,14 @@ pub fn traverse_directory_to_xml<W: Write>(
     };
 
     let mut visited_dirs = HashSet::new();
+    let mut pending_folders = Vec::new();
     traverse_directory_to_xml_impl(
         path,
         is_root,
         &config,
         visited_inodes,
         &mut visited_dirs,
+        &mut pending_folders,
         writer,
     )
     .map(|_| ())
@@ -57,8 +59,25 @@ pub(crate) fn traverse_directory_to_xml_with_config<W: Write>(
     visited_dirs: &mut HashSet<(u64, u64)>,
     writer: &mut Writer<W>,
 ) -> io::Result<()> {
-    traverse_directory_to_xml_impl(path, is_root, config, visited_inodes, visited_dirs, writer)
-        .map(|_| ())
+    let mut pending_folders = Vec::new();
+    traverse_directory_to_xml_impl(
+        path,
+        is_root,
+        config,
+        visited_inodes,
+        visited_dirs,
+        &mut pending_folders,
+        writer,
+    )
+    .map(|_| ())
+}
+
+struct FolderFrame {
+    name: String,
+    created: String,
+    modified: String,
+    accessed: String,
+    started: bool,
 }
 
 fn traverse_directory_to_xml_impl<W: Write>(
@@ -67,6 +86,7 @@ fn traverse_directory_to_xml_impl<W: Write>(
     config: &TraversalConfig<'_>,
     visited_inodes: &mut HashSet<(u64, u64)>,
     visited_dirs: &mut HashSet<(u64, u64)>,
+    pending_folders: &mut Vec<FolderFrame>,
     writer: &mut Writer<W>,
 ) -> io::Result<bool> {
     // Get metadata of the current directory (suppress internal log for root; main.rs will print it)
@@ -181,65 +201,70 @@ fn traverse_directory_to_xml_impl<W: Write>(
         }
     }
 
-    let mut child_buffer = Vec::new();
+    let frame_index = pending_folders.len();
+    pending_folders.push(FolderFrame {
+        name,
+        created,
+        modified,
+        accessed,
+        started: false,
+    });
+
     let mut has_output_children = false;
-    {
-        let mut child_writer = Writer::new(&mut child_buffer);
 
-        // Files first
-        for (entry_path, entry_metadata) in file_entries {
-            if should_skip_output_file(&entry_path, config.output_paths_to_skip) {
-                info!("Skipping output file: {}", entry_path.display());
-                continue;
-            }
-
-            if process_file_entry_impl(
-                &entry_path,
-                &entry_metadata,
-                config.options,
-                visited_inodes,
-                &mut child_writer,
-            )? {
-                has_output_children = true;
-            }
+    // Files first
+    for (entry_path, entry_metadata) in file_entries {
+        if should_skip_output_file(&entry_path, config.output_paths_to_skip) {
+            info!("Skipping output file: {}", entry_path.display());
+            continue;
         }
-        // Then directories (depth-first behavior preserved; only sibling ordering changes)
-        for entry_path in dir_entries {
-            if traverse_directory_to_xml_impl(
-                &entry_path,
-                false,
-                config,
-                visited_inodes,
-                visited_dirs,
-                &mut child_writer,
-            )? {
-                has_output_children = true;
-            }
+
+        if process_file_entry_impl(
+            &entry_path,
+            &entry_metadata,
+            config.options,
+            visited_inodes,
+            Some(pending_folders),
+            writer,
+        )? {
+            has_output_children = true;
+        }
+    }
+    // Then directories (depth-first behavior preserved; only sibling ordering changes)
+    for entry_path in dir_entries {
+        if traverse_directory_to_xml_impl(
+            &entry_path,
+            false,
+            config,
+            visited_inodes,
+            visited_dirs,
+            pending_folders,
+            writer,
+        )? {
+            has_output_children = true;
         }
     }
 
-    if !is_root && !has_output_children && !config.options.include_empty_folders {
+    if !has_output_children && (is_root || config.options.include_empty_folders) {
+        start_pending_folders(pending_folders, writer)?;
+        has_output_children = true;
+    }
+
+    let folder_started = pending_folders[frame_index].started;
+
+    if folder_started {
+        writer
+            .write_event(Event::End(BytesEnd::new(TAG_FOLDER)))
+            .map_err(io::Error::other)?;
+    }
+
+    pending_folders.pop();
+
+    if !has_output_children {
         info!("Skipping empty folder: {}", path.display());
-        return Ok(false);
     }
 
-    // Output Folder tag only after verifying that it has visible children, unless empty folders are requested.
-    let mut folder_tag = BytesStart::new(TAG_FOLDER);
-    let sanitized_name = sanitize_for_xml(&name);
-    folder_tag.push_attribute(("name", sanitized_name.as_str()));
-    folder_tag.push_attribute(("created", created.as_str()));
-    folder_tag.push_attribute(("modified", modified.as_str()));
-    folder_tag.push_attribute(("accessed", accessed.as_str()));
-    writer
-        .write_event(Event::Start(folder_tag))
-        .map_err(io::Error::other)?;
-    writer.get_mut().write_all(&child_buffer)?;
-
-    // Close Folder tag
-    writer
-        .write_event(Event::End(BytesEnd::new(TAG_FOLDER)))
-        .map_err(io::Error::other)?;
-    Ok(true)
+    Ok(has_output_children)
 }
 
 /// Processes a file entry and outputs XML.
@@ -250,7 +275,7 @@ pub fn process_file_entry<W: Write>(
     visited_inodes: &mut HashSet<(u64, u64)>,
     writer: &mut Writer<W>,
 ) -> io::Result<()> {
-    process_file_entry_impl(path, metadata, options, visited_inodes, writer).map(|_| ())
+    process_file_entry_impl(path, metadata, options, visited_inodes, None, writer).map(|_| ())
 }
 
 fn process_file_entry_impl<W: Write>(
@@ -258,6 +283,7 @@ fn process_file_entry_impl<W: Write>(
     metadata: &Metadata,
     options: &Options,
     visited_inodes: &mut HashSet<(u64, u64)>,
+    pending_folders: Option<&mut Vec<FolderFrame>>,
     writer: &mut Writer<W>,
 ) -> io::Result<bool> {
     // Get file size (logical or physical depending on options.apparent_size)
@@ -294,6 +320,10 @@ fn process_file_entry_impl<W: Write>(
     // Get file times
     let (created, modified, accessed) = get_file_times(metadata);
 
+    if let Some(pending_folders) = pending_folders {
+        start_pending_folders(pending_folders, writer)?;
+    }
+
     // Output File tag
     let mut file_tag = BytesStart::new(TAG_FILE);
     let sanitized_name = sanitize_for_xml(&name);
@@ -307,6 +337,30 @@ fn process_file_entry_impl<W: Write>(
         .map_err(io::Error::other)?;
 
     Ok(true)
+}
+
+fn start_pending_folders<W: Write>(
+    pending_folders: &mut [FolderFrame],
+    writer: &mut Writer<W>,
+) -> io::Result<()> {
+    for frame in pending_folders {
+        if frame.started {
+            continue;
+        }
+
+        let mut folder_tag = BytesStart::new(TAG_FOLDER);
+        let sanitized_name = sanitize_for_xml(&frame.name);
+        folder_tag.push_attribute(("name", sanitized_name.as_str()));
+        folder_tag.push_attribute(("created", frame.created.as_str()));
+        folder_tag.push_attribute(("modified", frame.modified.as_str()));
+        folder_tag.push_attribute(("accessed", frame.accessed.as_str()));
+        writer
+            .write_event(Event::Start(folder_tag))
+            .map_err(io::Error::other)?;
+        frame.started = true;
+    }
+
+    Ok(())
 }
 
 fn should_skip_output_file(path: &Path, output_paths_to_skip: &[PathBuf]) -> bool {
@@ -393,6 +447,7 @@ mod tests {
         };
         let mut visited_inodes = HashSet::new();
         let mut visited_dirs = HashSet::new();
+        let mut pending_folders = Vec::new();
         let mut first_output = Vec::new();
         let mut first_writer = Writer::new(&mut first_output);
 
@@ -402,10 +457,12 @@ mod tests {
             &config,
             &mut visited_inodes,
             &mut visited_dirs,
+            &mut pending_folders,
             &mut first_writer,
         )
         .expect("First traversal failed"));
 
+        let mut pending_folders = Vec::new();
         let mut second_output = Vec::new();
         let mut second_writer = Writer::new(&mut second_output);
         assert!(
@@ -415,6 +472,7 @@ mod tests {
                 &config,
                 &mut visited_inodes,
                 &mut visited_dirs,
+                &mut pending_folders,
                 &mut second_writer,
             )
             .expect("Second traversal failed"),
