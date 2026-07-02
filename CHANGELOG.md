@@ -4,6 +4,24 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.1.7] - 2026-07-02
+
+Changed:
+- Stream folder XML output without buffering full subtrees in memory
+- Prefer `-o` examples for writing output inside the scanned directory
+- Treat `--compression-level` on stdout as implying gzip output
+- In `--apparent-size` mode, emit each hard-link path instead of deduplicating by file identity
+
+Fixed:
+- Preserve the root `<Folder>` element for empty scans and scans where all files are filtered out
+- Avoid empty root folder names when scanning filesystem roots or mount-point roots
+- Continue scanning a directory when individual `read_dir` entries fail
+- Track visited directory identities to avoid directory cycles through bind mounts, junctions, or similar filesystem structures
+- Use stable Windows path identity for mount-boundary checks
+- Write output files through a temporary file and rename on success
+- Reject symbolic-link output targets to avoid truncating their targets
+- Explicitly finish gzip output before committing file output
+
 ## [0.1.6] - 2026-05-09
 
 Fixed:
