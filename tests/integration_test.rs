@@ -1,5 +1,8 @@
 use flate2::read::GzDecoder;
+use gpscan::platform::MetadataExtOps;
 use predicates::prelude::*;
+use quick_xml::events::{BytesStart, Event};
+use quick_xml::Reader;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::Path;
@@ -110,6 +113,155 @@ fn assert_xml_structure(xml_content: &str) {
         predicate::str::ends_with("</GrandPerspectiveScanDump>").eval(xml_content.trim_end()),
         "XML does not end with </GrandPerspectiveScanDump>"
     );
+    assert_valid_gpscan_xml(xml_content);
+}
+
+/// Parse the complete document and validate the GrandPerspective structure used by gpscan.
+fn assert_valid_gpscan_xml(xml_content: &str) {
+    let mut reader = Reader::from_str(xml_content);
+    let mut stack: Vec<Vec<u8>> = Vec::new();
+    let mut declaration_count = 0;
+    let mut root_count = 0;
+    let mut scan_info_count = 0;
+    let mut folder_count = 0;
+
+    loop {
+        match reader
+            .read_event()
+            .expect("Generated output must be well-formed XML")
+        {
+            Event::Decl(_) => declaration_count += 1,
+            Event::Start(event) => {
+                let name = event.name().as_ref().to_vec();
+                match name.as_slice() {
+                    b"GrandPerspectiveScanDump" => {
+                        root_count += 1;
+                        assert!(stack.is_empty(), "The root element must be outermost");
+                        assert_attributes(&event, &["appVersion", "formatVersion"]);
+                        assert_eq!(attribute_value(&event, "appVersion"), "4");
+                        assert_eq!(attribute_value(&event, "formatVersion"), "7");
+                    }
+                    b"ScanInfo" => {
+                        scan_info_count += 1;
+                        assert_eq!(
+                            stack.last().map(Vec::as_slice),
+                            Some(&b"GrandPerspectiveScanDump"[..])
+                        );
+                        assert_attributes(
+                            &event,
+                            &[
+                                "volumePath",
+                                "volumeSize",
+                                "freeSpace",
+                                "scanTime",
+                                "fileSizeMeasure",
+                            ],
+                        );
+                        attribute_value(&event, "volumeSize")
+                            .parse::<u64>()
+                            .expect("volumeSize must be an unsigned integer");
+                        attribute_value(&event, "freeSpace")
+                            .parse::<u64>()
+                            .expect("freeSpace must be an unsigned integer");
+                        chrono::DateTime::parse_from_rfc3339(&attribute_value(&event, "scanTime"))
+                            .expect("scanTime must be an RFC 3339 timestamp");
+                        assert!(matches!(
+                            attribute_value(&event, "fileSizeMeasure").as_str(),
+                            "physical" | "logical"
+                        ));
+                    }
+                    b"Folder" => {
+                        folder_count += 1;
+                        assert!(stack.last().is_some_and(|parent| {
+                            matches!(parent.as_slice(), b"ScanInfo" | b"Folder")
+                        }));
+                        assert_attributes(&event, &["name", "created", "modified", "accessed"]);
+                        assert!(!attribute_value(&event, "name").is_empty());
+                        assert_timestamp_attributes(&event);
+                    }
+                    name => panic!("Unexpected XML element: {}", String::from_utf8_lossy(name)),
+                }
+                stack.push(name);
+            }
+            Event::Empty(event) => {
+                assert_eq!(event.name().as_ref(), b"File");
+                assert_eq!(stack.last().map(Vec::as_slice), Some(&b"Folder"[..]));
+                assert_attributes(&event, &["name", "size", "created", "modified", "accessed"]);
+                assert!(!attribute_value(&event, "name").is_empty());
+                attribute_value(&event, "size")
+                    .parse::<u64>()
+                    .expect("File size must be an unsigned integer");
+                assert_timestamp_attributes(&event);
+            }
+            Event::End(event) => {
+                let expected = stack.pop().expect("Unexpected closing XML element");
+                assert_eq!(event.name().as_ref(), expected.as_slice());
+            }
+            Event::Text(event) => assert!(event.iter().all(u8::is_ascii_whitespace)),
+            Event::Eof => break,
+            Event::Comment(_)
+            | Event::CData(_)
+            | Event::PI(_)
+            | Event::DocType(_)
+            | Event::GeneralRef(_) => panic!("Generated XML contains an unsupported node"),
+        }
+    }
+
+    assert!(stack.is_empty(), "XML contains unclosed elements");
+    assert_eq!(declaration_count, 1);
+    assert_eq!(root_count, 1);
+    assert_eq!(scan_info_count, 1);
+    assert!(folder_count >= 1);
+}
+
+fn assert_attributes(event: &BytesStart<'_>, required: &[&str]) {
+    for name in required {
+        assert!(
+            event
+                .attributes()
+                .map(|attribute| attribute.expect("Invalid XML attribute"))
+                .any(|attribute| attribute.key.as_ref() == name.as_bytes()),
+            "{} is missing attribute {}",
+            String::from_utf8_lossy(event.name().as_ref()),
+            name
+        );
+    }
+}
+
+fn attribute_value(event: &BytesStart<'_>, name: &str) -> String {
+    event
+        .attributes()
+        .map(|attribute| attribute.expect("Invalid XML attribute"))
+        .find(|attribute| attribute.key.as_ref() == name.as_bytes())
+        .map(|attribute| String::from_utf8_lossy(attribute.value.as_ref()).into_owned())
+        .unwrap_or_else(|| panic!("Missing XML attribute: {name}"))
+}
+
+fn assert_timestamp_attributes(event: &BytesStart<'_>) {
+    for name in ["created", "modified", "accessed"] {
+        chrono::DateTime::parse_from_rfc3339(&attribute_value(event, name))
+            .unwrap_or_else(|_| panic!("{name} must be an RFC 3339 timestamp"));
+    }
+}
+
+fn file_size_in_xml(xml_content: &str, filename: &str) -> Option<u64> {
+    let mut reader = Reader::from_str(xml_content);
+    loop {
+        match reader.read_event().expect("Generated output must parse") {
+            Event::Empty(event)
+                if event.name().as_ref() == b"File"
+                    && attribute_value(&event, "name") == filename =>
+            {
+                return Some(
+                    attribute_value(&event, "size")
+                        .parse()
+                        .expect("File size must be an unsigned integer"),
+                );
+            }
+            Event::Eof => return None,
+            _ => {}
+        }
+    }
 }
 
 /// Helper function to verify file presence in XML
@@ -250,6 +402,35 @@ fn test_gpscan_output() {
         "Expected logical measure when --apparent-size is set"
     );
     assert_file_in_xml(&xml_output_logical, "hardlink_to_file2", true);
+}
+
+#[test]
+fn test_physical_and_apparent_sizes_and_hard_link_accounting() {
+    let temp_dir = TempDir::new("gpscan_size_modes").expect("Failed to create temp dir");
+    let original = temp_dir.path().join("a-original.bin");
+    let hard_link = temp_dir.path().join("b-hard-link.bin");
+    fs::write(&original, vec![0x5a; 12_345]).expect("Failed to write test file");
+    fs::hard_link(&original, &hard_link).expect("Failed to create hard link");
+
+    let metadata = fs::metadata(&original).expect("Failed to read test metadata");
+    let physical_xml = run_gpscan(temp_dir.path(), &[]);
+    let apparent_xml = run_gpscan(temp_dir.path(), &["--apparent-size"]);
+
+    assert_xml_structure(&physical_xml);
+    assert_xml_structure(&apparent_xml);
+    assert_eq!(
+        file_size_in_xml(&physical_xml, "a-original.bin"),
+        Some(metadata.file_size(false))
+    );
+    assert_eq!(file_size_in_xml(&physical_xml, "b-hard-link.bin"), None);
+    assert_eq!(
+        file_size_in_xml(&apparent_xml, "a-original.bin"),
+        Some(metadata.file_size(true))
+    );
+    assert_eq!(
+        file_size_in_xml(&apparent_xml, "b-hard-link.bin"),
+        Some(metadata.file_size(true))
+    );
 }
 
 #[test]
