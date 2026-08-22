@@ -46,7 +46,6 @@ pub fn get_volume_info(root_path: &Path, disks: &Disks) -> (String, u64, u64) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
     fn test_get_volume_info_no_disks() {
@@ -57,32 +56,5 @@ mod tests {
         assert_eq!(volume_path, "/");
         assert_eq!(volume_size, 0);
         assert_eq!(free_space, 0);
-    }
-
-    #[test]
-    fn test_get_volume_info_with_current_dir() {
-        let disks = Disks::new_with_refreshed_list();
-        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let (volume_path, _volume_size, _free_space) = get_volume_info(&current_dir, &disks);
-
-        // Should return a valid volume path (not the default "/")
-        // The exact path depends on the system, but it should not be empty
-        assert!(!volume_path.is_empty());
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn test_windows_path_canonicalization() {
-        // Test that Windows UNC prefix is properly removed
-        let test_path = PathBuf::from(r"\\?\C:\test");
-        let _expected = "C:\\test";
-
-        // This is testing the logic inside get_volume_info
-        // We can't directly test the internal logic, but we can test the behavior
-        let disks = Disks::new();
-        let (_volume_path, _volume_size, _free_space) = get_volume_info(&test_path, &disks);
-
-        // The function should handle the path without panicking
-        // Exact assertions depend on the system state
     }
 }

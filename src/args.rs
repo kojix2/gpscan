@@ -2,6 +2,10 @@ use clap::{Arg, ArgMatches, Command};
 
 /// Parses command-line arguments using clap.
 pub fn parse_args() -> ArgMatches {
+    command().get_matches()
+}
+
+pub(crate) fn command() -> Command {
     let bold_underline = "\x1b[1;4m";
     let bold = "\x1b[1m";
     let reset = "\x1b[0m";
@@ -99,20 +103,4 @@ pub fn parse_args() -> ArgMatches {
                 .action(clap::ArgAction::SetTrue),
         )
         .arg_required_else_help(true)
-        .get_matches()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_args_function_exists() {
-        // Simple smoke test to ensure the function compiles and can be called
-        // Actual functionality is tested via integration tests
-        let _result = std::panic::catch_unwind(|| {
-            // This will fail due to no command line args, but ensures the function exists
-            let _ = Command::new("test").try_get_matches_from(vec!["test"]);
-        });
-    }
 }

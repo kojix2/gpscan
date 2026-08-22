@@ -9,8 +9,6 @@ pub enum CompressionType {
     Gzip,
 }
 
-impl CompressionType {}
-
 pub enum FinishableWriter<W: Write> {
     None(W),
     Gzip(GzEncoder<W>),
@@ -54,7 +52,7 @@ pub fn create_finishable_writer_with_level<W: Write>(
     match compression_type {
         CompressionType::None => FinishableWriter::None(writer),
         CompressionType::Gzip => {
-            let lvl = if level > 9 { 9 } else { level };
+            let lvl = level.min(9);
             FinishableWriter::Gzip(GzEncoder::new(writer, GzipCompression::new(lvl as u32)))
         }
     }

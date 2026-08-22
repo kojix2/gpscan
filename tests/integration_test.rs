@@ -363,9 +363,6 @@ fn test_gpscan_output() {
     // Run `gpscan` and capture its output
     let xml_output = run_gpscan(dir_path, &[]);
 
-    // Debug print the XML output
-    println!("{}", xml_output);
-
     // Check if the XML output contains expected entries for non-empty files and folders
     assert_file_in_xml(&xml_output, "file1.txt", true);
     assert_folder_in_xml(&xml_output, "subdir", true);

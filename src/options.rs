@@ -129,72 +129,18 @@ impl Default for Options {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::{Arg, Command};
+    use crate::args::command;
+    use clap::Command;
 
-    /// Helper function to create a test command with all arguments
     fn create_test_command() -> Command {
-        Command::new("test")
-            .arg(
-                Arg::new("output")
-                    .short('o')
-                    .long("output")
-                    .value_name("FILE")
-                    .num_args(1),
-            )
-            .arg(
-                Arg::new("compression-level")
-                    .long("compression-level")
-                    .value_name("0-9")
-                    .conflicts_with("no-gzip")
-                    .value_parser(clap::value_parser!(u8).range(0..=9))
-                    .num_args(1),
-            )
-            .arg(
-                Arg::new("apparent-size")
-                    .long("apparent-size")
-                    .action(clap::ArgAction::SetTrue),
-            )
-            .arg(
-                Arg::new("mounts")
-                    .long("mounts")
-                    .action(clap::ArgAction::SetTrue),
-            )
-            .arg(
-                Arg::new("zero-files")
-                    .long("zero-files")
-                    .action(clap::ArgAction::SetTrue),
-            )
-            .arg(
-                Arg::new("empty-folders")
-                    .long("empty-folders")
-                    .action(clap::ArgAction::SetTrue),
-            )
-            .arg(
-                Arg::new("gzip")
-                    .short('z')
-                    .long("gzip")
-                    .conflicts_with("no-gzip")
-                    .action(clap::ArgAction::SetTrue),
-            )
-            .arg(
-                Arg::new("no-gzip")
-                    .long("no-gzip")
-                    .conflicts_with_all(["gzip", "compression-level"])
-                    .action(clap::ArgAction::SetTrue),
-            )
-            .arg(
-                Arg::new("force")
-                    .short('f')
-                    .long("force")
-                    .action(clap::ArgAction::SetTrue),
-            )
+        command()
     }
 
     #[test]
     fn test_options_from_matches_default() {
         let app = create_test_command();
 
-        let matches = app.try_get_matches_from(vec!["test"]).unwrap();
+        let matches = app.try_get_matches_from(vec!["test", "."]).unwrap();
         let options = Options::from_matches(&matches);
 
         assert!(!options.apparent_size);
@@ -221,6 +167,7 @@ mod tests {
                 "--compression-level",
                 "9",
                 "--force",
+                ".",
             ])
             .unwrap();
         let options = Options::from_matches(&matches);
@@ -250,10 +197,8 @@ mod tests {
     fn test_file_output_default_gzip() {
         let app = create_test_command();
 
-        // Test file output defaults to gzip compression
         let matches = app
-            .clone()
-            .try_get_matches_from(vec!["test", "--output", "foo"])
+            .try_get_matches_from(vec!["test", "--output", "foo", "."])
             .unwrap();
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::Gzip);
@@ -265,10 +210,8 @@ mod tests {
     fn test_file_output_with_gpscan_extension() {
         let app = create_test_command();
 
-        // Test file output with .gpscan extension doesn't add another extension
         let matches = app
-            .clone()
-            .try_get_matches_from(vec!["test", "--output", "foo.gpscan"])
+            .try_get_matches_from(vec!["test", "--output", "foo.gpscan", "."])
             .unwrap();
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::Gzip);
@@ -280,10 +223,8 @@ mod tests {
     fn test_file_output_with_gz_extension() {
         let app = create_test_command();
 
-        // Test file output with .gz extension gets .gpscan added
         let matches = app
-            .clone()
-            .try_get_matches_from(vec!["test", "--output", "foo.gz"])
+            .try_get_matches_from(vec!["test", "--output", "foo.gz", "."])
             .unwrap();
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::Gzip);
@@ -295,10 +236,8 @@ mod tests {
     fn test_file_output_no_gzip() {
         let app = create_test_command();
 
-        // Test --no-gzip disables compression for file output
         let matches = app
-            .clone()
-            .try_get_matches_from(vec!["test", "--output", "foo", "--no-gzip"])
+            .try_get_matches_from(vec!["test", "--output", "foo", "--no-gzip", "."])
             .unwrap();
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::None);
@@ -310,8 +249,7 @@ mod tests {
     fn test_stdout_default_no_compression() {
         let app = create_test_command();
 
-        // Test stdout defaults to no compression
-        let matches = app.clone().try_get_matches_from(vec!["test"]).unwrap();
+        let matches = app.try_get_matches_from(vec!["test", "."]).unwrap();
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::None);
         assert_eq!(options.output_filename, None);
@@ -322,10 +260,8 @@ mod tests {
     fn test_stdout_with_gzip() {
         let app = create_test_command();
 
-        // Test --gzip enables compression for stdout
         let matches = app
-            .clone()
-            .try_get_matches_from(vec!["test", "--gzip"])
+            .try_get_matches_from(vec!["test", "--gzip", "."])
             .unwrap();
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::Gzip);
@@ -338,8 +274,7 @@ mod tests {
         let app = create_test_command();
 
         let matches = app
-            .clone()
-            .try_get_matches_from(vec!["test", "--compression-level", "9"])
+            .try_get_matches_from(vec!["test", "--compression-level", "9", "."])
             .unwrap();
         let options = Options::from_matches(&matches);
         assert_eq!(options.compression_type, CompressionType::Gzip);
@@ -351,9 +286,7 @@ mod tests {
     fn test_gzip_and_no_gzip_conflict() {
         let app = create_test_command();
 
-        let result = app
-            .clone()
-            .try_get_matches_from(vec!["test", "--gzip", "--no-gzip"]);
+        let result = app.try_get_matches_from(vec!["test", "--gzip", "--no-gzip", "."]);
 
         assert!(result.is_err());
     }
@@ -362,13 +295,14 @@ mod tests {
     fn test_compression_level_and_no_gzip_conflict() {
         let app = create_test_command();
 
-        let result = app.clone().try_get_matches_from(vec![
+        let result = app.try_get_matches_from(vec![
             "test",
             "--output",
             "foo",
             "--no-gzip",
             "--compression-level",
             "9",
+            ".",
         ]);
 
         assert!(result.is_err());
