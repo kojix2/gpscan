@@ -119,7 +119,7 @@ fn assert_xml_structure(xml_content: &str) {
 /// Parse the complete document and validate the GrandPerspective structure used by gpscan.
 fn assert_valid_gpscan_xml(xml_content: &str) {
     let mut reader = Reader::from_str(xml_content);
-    let mut stack: Vec<Vec<u8>> = Vec::new();
+    let mut stack: Vec<String> = Vec::new();
     let mut declaration_count = 0;
     let mut root_count = 0;
     let mut scan_info_count = 0;
@@ -132,20 +132,20 @@ fn assert_valid_gpscan_xml(xml_content: &str) {
         {
             Event::Decl(_) => declaration_count += 1,
             Event::Start(event) => {
-                let name = event.name().as_ref().to_vec();
-                match name.as_slice() {
-                    b"GrandPerspectiveScanDump" => {
+                let name = event.name().as_ref().to_owned();
+                match name.as_str() {
+                    "GrandPerspectiveScanDump" => {
                         root_count += 1;
                         assert!(stack.is_empty(), "The root element must be outermost");
                         assert_attributes(&event, &["appVersion", "formatVersion"]);
                         assert_eq!(attribute_value(&event, "appVersion"), "4");
                         assert_eq!(attribute_value(&event, "formatVersion"), "7");
                     }
-                    b"ScanInfo" => {
+                    "ScanInfo" => {
                         scan_info_count += 1;
                         assert_eq!(
-                            stack.last().map(Vec::as_slice),
-                            Some(&b"GrandPerspectiveScanDump"[..])
+                            stack.last().map(String::as_str),
+                            Some("GrandPerspectiveScanDump")
                         );
                         assert_attributes(
                             &event,
@@ -170,22 +170,22 @@ fn assert_valid_gpscan_xml(xml_content: &str) {
                             "physical" | "logical"
                         ));
                     }
-                    b"Folder" => {
+                    "Folder" => {
                         folder_count += 1;
                         assert!(stack.last().is_some_and(|parent| {
-                            matches!(parent.as_slice(), b"ScanInfo" | b"Folder")
+                            matches!(parent.as_str(), "ScanInfo" | "Folder")
                         }));
                         assert_attributes(&event, &["name", "created", "modified", "accessed"]);
                         assert!(!attribute_value(&event, "name").is_empty());
                         assert_timestamp_attributes(&event);
                     }
-                    name => panic!("Unexpected XML element: {}", String::from_utf8_lossy(name)),
+                    _ => panic!("Unexpected XML element: {}", name),
                 }
                 stack.push(name);
             }
             Event::Empty(event) => {
-                assert_eq!(event.name().as_ref(), b"File");
-                assert_eq!(stack.last().map(Vec::as_slice), Some(&b"Folder"[..]));
+                assert_eq!(event.name().as_ref(), "File");
+                assert_eq!(stack.last().map(String::as_str), Some("Folder"));
                 assert_attributes(&event, &["name", "size", "created", "modified", "accessed"]);
                 assert!(!attribute_value(&event, "name").is_empty());
                 attribute_value(&event, "size")
@@ -195,9 +195,9 @@ fn assert_valid_gpscan_xml(xml_content: &str) {
             }
             Event::End(event) => {
                 let expected = stack.pop().expect("Unexpected closing XML element");
-                assert_eq!(event.name().as_ref(), expected.as_slice());
+                assert_eq!(event.name().as_ref(), expected);
             }
-            Event::Text(event) => assert!(event.iter().all(u8::is_ascii_whitespace)),
+            Event::Text(event) => assert!(event.as_ref().bytes().all(|b| b.is_ascii_whitespace())),
             Event::Eof => break,
             Event::Comment(_)
             | Event::CData(_)
@@ -220,9 +220,9 @@ fn assert_attributes(event: &BytesStart<'_>, required: &[&str]) {
             event
                 .attributes()
                 .map(|attribute| attribute.expect("Invalid XML attribute"))
-                .any(|attribute| attribute.key.as_ref() == name.as_bytes()),
+                .any(|attribute| attribute.key.as_ref() == *name),
             "{} is missing attribute {}",
-            String::from_utf8_lossy(event.name().as_ref()),
+            event.name().as_ref(),
             name
         );
     }
@@ -232,8 +232,8 @@ fn attribute_value(event: &BytesStart<'_>, name: &str) -> String {
     event
         .attributes()
         .map(|attribute| attribute.expect("Invalid XML attribute"))
-        .find(|attribute| attribute.key.as_ref() == name.as_bytes())
-        .map(|attribute| String::from_utf8_lossy(attribute.value.as_ref()).into_owned())
+        .find(|attribute| attribute.key.as_ref() == name)
+        .map(|attribute| attribute.value.as_ref().to_owned())
         .unwrap_or_else(|| panic!("Missing XML attribute: {name}"))
 }
 
@@ -249,7 +249,7 @@ fn file_size_in_xml(xml_content: &str, filename: &str) -> Option<u64> {
     loop {
         match reader.read_event().expect("Generated output must parse") {
             Event::Empty(event)
-                if event.name().as_ref() == b"File"
+                if event.name().as_ref() == "File"
                     && attribute_value(&event, "name") == filename =>
             {
                 return Some(
