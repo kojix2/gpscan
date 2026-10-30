@@ -57,7 +57,7 @@ pub fn run(matches: ArgMatches) -> io::Result<()> {
     let root_dev = path_device_id(&root_path_abs, &root_metadata)?;
 
     // Create Disks instance and refresh disk list
-    let disks = Disks::new_with_refreshed_list();
+    let disks = Disks::new_with_refreshed_list().map_err(io::Error::other)?;
 
     // Get volume information
     let (volume_path, volume_size, free_space) = get_volume_info(&root_path_abs, &disks);
