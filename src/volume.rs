@@ -49,7 +49,7 @@ mod tests {
 
     #[test]
     fn test_get_volume_info_no_disks() {
-        let disks = Disks::new();
+        let disks = Disks::new().expect("Failed to initialize empty disk list");
         let path = Path::new("/nonexistent");
         let (volume_path, volume_size, free_space) = get_volume_info(path, &disks);
 
